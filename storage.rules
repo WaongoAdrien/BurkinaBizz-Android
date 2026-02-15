@@ -1,0 +1,41 @@
+// storage.rules
+// ─────────────────────────────────────────────────────────────────────────────
+// Deploy with: firebase deploy --only storage
+// ─────────────────────────────────────────────────────────────────────────────
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── PRODUCT IMAGES ───────────────────────────────────────────────────────
+    // Vendors can upload their own product images only
+    match /products/{vendorId}/{filename} {
+      // Anyone can read product images (public marketplace)
+      allow read: if true;
+
+      // Only the authenticated vendor can upload to their own folder
+      allow write: if request.auth != null
+                   && request.auth.uid == vendorId
+                   && request.resource.size < 5 * 1024 * 1024   // Max 5 MB
+                   && request.resource.contentType.matches('image/.*');
+
+      // Vendor can delete their own images
+      allow delete: if request.auth != null && request.auth.uid == vendorId;
+    }
+
+    // ── USER AVATARS (future use) ─────────────────────────────────────────────
+    match /avatars/{userId}/{filename} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

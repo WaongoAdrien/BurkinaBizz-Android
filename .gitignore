@@ -1,0 +1,20 @@
+node_modules/
+.expo/
+dist/
+.DS_Store
+*.log
+ios/
+android/
+
+# Firebase - NEVER commit these
+google-services.json
+GoogleService-Info.plist
+google-play-service-account.json
+
+# Env files
+.env
+.env.local
+.env.production
+
+# EAS
+.eas/
