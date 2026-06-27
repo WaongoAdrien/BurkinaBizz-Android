@@ -1,0 +1,13 @@
+diff --git a/node_modules/expo/android/build.gradle b/node_modules/expo/android/build.gradle
+index 190ac19..c239816 100644
+--- a/node_modules/expo/android/build.gradle
++++ b/node_modules/expo/android/build.gradle
+@@ -7,7 +7,7 @@ def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.ab
+ apply from: expoModulesCorePlugin
+ applyKotlinExpoModulesCorePlugin()
+ useDefaultAndroidSdkVersions()
+-useExpoPublishing()
++// useExpoPublishing() — disabled: components.release unavailable in AGP 8.x afterEvaluate
+ 
+ static def versionToNumber(major, minor, patch) {
+   return patch * 100 + minor * 10000 + major * 1000000
