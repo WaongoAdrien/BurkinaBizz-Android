@@ -4,17 +4,58 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   KeyboardAvoidingView, Platform, Image, StyleSheet,
-  Alert, ActivityIndicator,
+  Alert, ActivityIndicator, Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
 import { useAuth } from '../../lib/AuthContext';
-import { Colors, CATEGORIES, CITIES } from '../../constants';
+import { Colors, CATEGORIES, CITIES, CITY_CATEGORIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
 import { Category, City, BusinessLocation } from '../../types';
+
+// ── Duplicate detection ────────────────────────────────────────────────────────
+const normStr = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+const diceSimilarity = (a: string, b: string): number => {
+  const na = normStr(a), nb = normStr(b);
+  if (na.length < 3 || nb.length < 3) return na === nb ? 1 : 0;
+  const tris = (s: string) => new Set(Array.from({ length: s.length - 2 }, (_, i) => s.slice(i, i + 3)));
+  const ta = tris(na), tb = tris(nb);
+  let overlap = 0;
+  ta.forEach(t => { if (tb.has(t)) overlap++; });
+  return (2 * overlap) / (ta.size + tb.size);
+};
+
+const levenshtein = (a: string, b: string): number => {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+};
+
+// Average best-word match across all significant words (catches typos like residance/residence)
+const wordOverlapScore = (a: string, b: string): number => {
+  const wa = normStr(a).split(' ').filter(w => w.length > 2);
+  const wb = normStr(b).split(' ').filter(w => w.length > 2);
+  if (!wa.length || !wb.length) return 0;
+  const scores = wa.map(w => Math.max(...wb.map(ww => 1 - levenshtein(w, ww) / Math.max(w.length, ww.length))));
+  return scores.reduce((s, v) => s + v, 0) / scores.length;
+};
+
+const DUPE_THRESHOLD = 0.8;
+const WORD_OVERLAP_THRESHOLD = 0.75;
+const isSameIgnoringSpacesAndPunct = (a: string, b: string) =>
+  a.toLowerCase().replace(/[\s.,\-']/g, '') === b.toLowerCase().replace(/[\s.,\-']/g, '');
+// ─────────────────────────────────────────────────────────────────────────────
 import LocationPicker from '../../components/Locationpicker';
 
 // ── Field outside component to prevent focus-loss bug ────────────────────────
@@ -74,47 +115,90 @@ function PickerModal({ visible, title, items, selected, onSelect, onClose, cardC
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_PHOTOS = 5;
+const STEPS = ['Informations', 'Contact', 'Réseaux', 'Localisation', 'Photos'];
 
 export default function AddBusinessScreen() {
   const router = useRouter();
   const { user, userProfile, isPending } = useAuth();
-  const { theme, isDark } = useColorTheme();
+  const { theme } = useColorTheme();
+
+  const [step, setStep] = useState(0);
 
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<Category>('Alimentation');
+  const [categories, setCategories] = useState<Category[]>([]);
   const [city, setCity] = useState<City>('Ouagadougou');
   const [description, setDescription] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [facebook, setFacebook] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [website, setWebsite] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [location, setLocation] = useState<BusinessLocation | undefined>(undefined);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [similarBiz, setSimilarBiz] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) { router.replace('/auth'); return; }
     if (isPending) { router.replace('/vendor/pending'); return; }
-    // Pre-fill phone from profile
-    if (userProfile?.phone) setPhone(userProfile.phone);
+    
+    // Load approved businesses for duplicate check
+    const q = query(collection(db, 'businesses'), where('status', '==', 'approved'));
+    const unsub = onSnapshot(q, snap => {
+      setBusinesses(snap.docs.map(d => d.data()));
+    });
+    return unsub;
   }, [user, isPending]);
 
-  const fp = { borderColor: theme.border, surfaceColor: theme.surface, textColor: theme.text, secondaryColor: theme.textSecondary };
+  // Debounced duplicate check
+  useEffect(() => {
+    if (name.trim().length < 3) { setSimilarBiz([]); return; }
+    const timer = setTimeout(() => {
+      const cityBiz = businesses.filter(b => b.city === city);
+      const matches = cityBiz
+        .map(b => ({
+          ...b,
+          _exact: isSameIgnoringSpacesAndPunct(b.name, name),
+          _score: diceSimilarity(b.name, name),
+          _wordScore: wordOverlapScore(b.name, name),
+        }))
+        .filter(b => b._exact || b._score >= DUPE_THRESHOLD || b._wordScore >= WORD_OVERLAP_THRESHOLD);
+      setSimilarBiz(matches);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [name, city, businesses]);
+
+  // Clear invalid categories when city changes
+  useEffect(() => {
+    const availableCategories = CITY_CATEGORIES[city] || CATEGORIES.map(c => c.label);
+    const validCategories = categories.filter(cat => availableCategories.includes(cat));
+    
+    if (validCategories.length !== categories.length) {
+      if (validCategories.length > 0) {
+        setCategories(validCategories);
+      } else {
+        // All selected categories invalid for new city — clear selection
+        setCategories([]);
+      }
+    }
+  }, [city]);
+
+  const fp = { borderColor: '#9CA3AF', surfaceColor: '#FFFFFF', textColor: theme.text, secondaryColor: theme.textSecondary };
 
   const pickPhotos = async () => {
     if (photoUris.length >= MAX_PHOTOS) {
-      Alert.alert('Maximum atteint', `Vous pouvez ajouter au maximum ${MAX_PHOTOS} photos.`);
+      Alert.alert('Maximum atteint', `Maximum ${MAX_PHOTOS} photos.`);
       return;
     }
     Alert.alert('Ajouter des photos', '', [
       { text: '📷 Prendre une photo', onPress: takePhoto },
-      { text: '🖼️ Choisir depuis la galerie', onPress: pickFromGallery },
+      { text: '🖼️ Galerie', onPress: pickFromGallery },
       { text: 'Annuler', style: 'cancel' },
     ]);
   };
@@ -135,39 +219,44 @@ export default function AddBusinessScreen() {
       mediaTypes: ['images'] as any,
       allowsMultipleSelection: true,
       selectionLimit: MAX_PHOTOS - photoUris.length,
-      allowsEditing: false,
       quality: 0.75,
     });
     if (!result.canceled) {
-      const newUris = result.assets.map(a => a.uri);
-      setPhotoUris(prev => [...prev, ...newUris].slice(0, MAX_PHOTOS));
+      setPhotoUris(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, MAX_PHOTOS));
     }
   };
 
-  const removePhoto = (index: number) => {
-    setPhotoUris(prev => prev.filter((_, i) => i !== index));
-  };
+  const removePhoto = (index: number) => setPhotoUris(prev => prev.filter((_, i) => i !== index));
 
-  const validate = (): boolean => {
+  const validateStep = (): boolean => {
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = 'Nom requis';
-    if (!description.trim()) e.description = 'Description requise';
-    if (!phone.trim() || phone.replace(/\D/g, '').length < 8) e.phone = 'Numéro valide requis';
+    if (step === 0) {
+      if (!name.trim()) e.name = 'Nom requis';
+      if (categories.length === 0) e.category = 'Au moins une catégorie requise';
+      if (!description.trim()) e.description = 'Description requise';
+    }
+    if (step === 1) {
+      if (!phone.trim() || phone.replace(/\D/g, '').length < 8) e.phone = 'Numéro valide requis';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
+  const handleNext = () => {
+    if (!validateStep()) return;
+    if (step < STEPS.length - 1) setStep(step + 1);
+  };
+
+  const handleBack = () => {
+    if (step > 0) setStep(step - 1);
+  };
+
   const uploadPhoto = async (uri: string, index: number): Promise<string> => {
-    const blob: Blob = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = () => resolve(xhr.response);
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.responseType = 'blob';
-      xhr.open('GET', uri, true);
-      xhr.send(null);
-    });
-    const filename = `businesses/${user!.uid}/${Date.now()}_${index}.jpg`;
-    const storageRef = ref(storage, filename);
+    // Fetch image as blob using fetch API (compatible with new architecture)
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    const storageRef = ref(storage, `businesses/${user!.uid}/${Date.now()}_${index}.jpg`);
     return new Promise((resolve, reject) => {
       const task = uploadBytesResumable(storageRef, blob);
       task.on('state_changed',
@@ -182,208 +271,277 @@ export default function AddBusinessScreen() {
     });
   };
 
-  const handleSubmit = async () => {
-    if (!validate() || !user) return;
+  const handleSubmit = () => {
+    if (!validateStep() || !user) return;
+    if (similarBiz.length > 0) {
+      const names = similarBiz.map(b => `"${b.name}"`).join(', ');
+      Alert.alert(
+        '⚠️ Doublon possible',
+        `Une entreprise similaire existe déjà à ${city} :\n${names}\n\nVoulez-vous quand même soumettre?`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Soumettre quand même', onPress: submitBusiness },
+        ]
+      );
+      return;
+    }
+    submitBusiness();
+  };
+
+  const submitBusiness = async () => {
+    if (!user) return;
     setLoading(true);
     setUploadProgress(0);
     try {
-      // Upload all photos
       const uploadedUrls: string[] = [];
       for (let i = 0; i < photoUris.length; i++) {
-        try {
-          const url = await uploadPhoto(photoUris[i], i);
-          uploadedUrls.push(url);
-        } catch {
-          // skip failed photo, don't block submission
-        }
+        try { uploadedUrls.push(await uploadPhoto(photoUris[i], i)); } catch {}
       }
 
       await addDoc(collection(db, 'businesses'), {
         name: name.trim(),
-        category,
+        category: categories[0],   // Primary category (first selected)
+        categories,                // All selected categories
         city,
         description: description.trim(),
         phone: phone.trim(),
         whatsapp: whatsapp.trim() || null,
         facebook: facebook.trim() || null,
         instagram: instagram.trim() || null,
+        website: website.trim() || null,
         photos: uploadedUrls,
         coverPhoto: uploadedUrls[0] || '',
         ownerId: user.uid,
         ownerName: userProfile?.name || user.email || '',
-        location: location || null,
-        status: 'pending',   // admin must approve before appearing in directory
+        location: location && (location.address || location.latitude) ? {
+          address: location.address ?? null,
+          latitude: location.latitude ?? null,
+          longitude: location.longitude ?? null,
+        } : null,
+        status: 'pending',
         createdAt: serverTimestamp(),
       });
 
-      Alert.alert(
-        '✅ Demande envoyée!',
-        'Votre entreprise sera examinée par notre équipe et publiée sous 24–48h.',
-        [{ text: 'OK', onPress: () => router.replace('/vendor/dashboard') }]
-      );
+      Alert.alert('✅ Demande envoyée!', 'Votre entreprise sera examinée sous 24–48h.',
+        [{ text: 'OK', onPress: () => router.replace('/vendor/dashboard') }]);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Erreur', 'Impossible d\'envoyer la demande. Vérifiez votre connexion.');
-    } finally {
-      setLoading(false);
-    }
+      Alert.alert('Erreur', "Impossible d'envoyer. Vérifiez votre connexion.");
+    } finally { setLoading(false); }
   };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* PROGRESS BAR */}
+      <View style={[styles.progressBar, { backgroundColor: theme.surface }]}>
+        {STEPS.map((_, i) => (
+          <View key={i} style={[styles.progressDot, { backgroundColor: i <= step ? Colors.primary : theme.border }]} />
+        ))}
+      </View>
+
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={[styles.stepTitle, { color: theme.text }]}>
+          {step + 1}. {STEPS[step]}
+        </Text>
 
-        {/* PENDING NOTICE */}
-        <View style={[styles.pendingNotice, { backgroundColor: Colors.cta + '22', borderColor: Colors.cta }]}>
-          <Text style={styles.pendingNoticeIcon}>⏳</Text>
-          <Text style={[styles.pendingNoticeText, { color: theme.text }]}>
-            Votre demande sera examinée par notre équipe avant d'apparaître dans l'annuaire.
-          </Text>
-        </View>
+        {/* STEP 0: Informations générales */}
+        {step === 0 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Field label="Nom de l'entreprise *" value={name} onChangeText={setName}
+              placeholder="Ex: Restaurant Chez Fatou" maxLength={80} error={errors.name} {...fp} />
 
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>📋 Informations générales</Text>
-
-          <Field label="Nom de l'entreprise *" value={name} onChangeText={setName}
-            placeholder="Ex: Restaurant Chez Fatou" maxLength={80} error={errors.name} {...fp} />
-
-          {/* Category */}
-          <View style={styles.fieldWrapper}>
-            <Text style={[styles.fieldLabel, { color: theme.text }]}>Catégorie *</Text>
-            <TouchableOpacity style={[styles.selector, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => setShowCategoryPicker(true)}>
-              <Text style={{ color: theme.text, fontSize: 15 }}>{CATEGORIES.find(c => c.label === category)?.icon} {category}</Text>
-              <Text style={{ color: theme.textSecondary }}>▾</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* City */}
-          <View style={styles.fieldWrapper}>
-            <Text style={[styles.fieldLabel, { color: theme.text }]}>Ville *</Text>
-            <TouchableOpacity style={[styles.selector, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => setShowCityPicker(true)}>
-              <Text style={{ color: theme.text, fontSize: 15 }}>📍 {city}</Text>
-              <Text style={{ color: theme.textSecondary }}>▾</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Field label="Description *" value={description} onChangeText={setDescription}
-            placeholder="Décrivez votre entreprise: services proposés, horaires, spécialités..."
-            multiline maxLength={600} error={errors.description} {...fp} />
-        </View>
-
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>📞 Contact</Text>
-          <Field label="Téléphone *" value={phone} onChangeText={setPhone}
-            placeholder="+22670000000" keyboardType="phone-pad" error={errors.phone} {...fp} />
-          <Field label="WhatsApp" value={whatsapp} onChangeText={setWhatsapp}
-            placeholder="+22670000000 (si différent)" keyboardType="phone-pad" optional {...fp} />
-        </View>
-
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>🌐 Réseaux sociaux</Text>
-          <Field label="Facebook" value={facebook} onChangeText={setFacebook}
-            placeholder="Lien ou nom de la page" optional {...fp} />
-          <Field label="Instagram" value={instagram} onChangeText={setInstagram}
-            placeholder="@votre_compte" optional {...fp} />
-        </View>
-
-
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>📍 Localisation <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '400' }}>(optionnel)</Text></Text>
-          <Text style={[styles.photoHint, { color: theme.textSecondary }]}>
-            Aidez vos clients à vous trouver. Entrez votre adresse ou placez une épingle sur la carte.
-          </Text>
-
-          {location?.address || location?.latitude ? (
-            <View style={[styles.locationPreview, { backgroundColor: Colors.primary + '15', borderColor: Colors.primary + '40' }]}>
-              <Text style={styles.locationPreviewIcon}>📍</Text>
-              <View style={{ flex: 1 }}>
-                {location.address && (
-                  <Text style={[styles.locationPreviewText, { color: theme.text }]} numberOfLines={2}>{location.address}</Text>
-                )}
-                {location.latitude && (
-                  <Text style={[styles.locationPreviewCoords, { color: theme.textSecondary }]}>
-                    GPS: {location.latitude.toFixed(4)}, {location.longitude?.toFixed(4)}
-                  </Text>
-                )}
+            {similarBiz.length > 0 && (
+              <View style={styles.dupeWarning}>
+                <MaterialIcons name="warning" size={16} color="#E65100" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dupeWarningTitle}>Doublon possible</Text>
+                  {similarBiz.map((b, i) => (
+                    <Text key={i} style={styles.dupeWarningItem}>
+                      {'• '}{b.name}{' '}
+                      <Text style={styles.dupeWarningReason}>
+                        {b._exact
+                          ? '| identique '
+                          : b._score >= DUPE_THRESHOLD
+                          ? '| nom très similaire'
+                          : '| mots similaires (possible faute)'}
+                      </Text>
+                    </Text>
+                  ))}
+                </View>
               </View>
-              <TouchableOpacity onPress={() => setShowLocationPicker(true)}>
-                <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 13 }}>Modifier</Text>
+            )}
+
+            {/* CITY SELECTION - MOVED FIRST */}
+            <View style={styles.fieldWrapper}>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>Ville *</Text>
+              <TouchableOpacity style={[styles.selector, { borderColor: '#9CA3AF', backgroundColor: '#FFFFFF' }]}
+                onPress={() => { Keyboard.dismiss(); setShowCityPicker(true); }}>
+                <Text style={{ color: theme.text, fontSize: 15 }}>📍 {city}</Text>
+                <Text style={{ color: theme.textSecondary }}>▾</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.addLocationBtn, { borderColor: Colors.primary }]}
-              onPress={() => setShowLocationPicker(true)}
-            >
-              <Text style={{ fontSize: 24 }}>🗺️</Text>
-              <Text style={[styles.addLocationText, { color: Colors.primary }]}>Ajouter une localisation</Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        {/* PHOTOS */}
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>📷 Photos ({photoUris.length}/{MAX_PHOTOS})</Text>
-          <Text style={[styles.photoHint, { color: theme.textSecondary }]}>
-            Ajoutez jusqu'à {MAX_PHOTOS} photos. La première sera la photo de couverture.
-          </Text>
-          <View style={styles.photoGrid}>
-            {photoUris.map((uri, i) => (
-              <View key={i} style={styles.photoThumbBox}>
-                <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
-                {i === 0 && (
-                  <View style={styles.coverBadge}>
-                    <Text style={styles.coverBadgeText}>Couverture</Text>
-                  </View>
-                )}
-                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(i)}>
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✕</Text>
+            {/* CATEGORIES - FILTERED BY CITY */}
+            <View style={styles.fieldWrapper}>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>Catégories * (sélectionnez toutes les catégories qui s'appliquent)</Text>
+              <View style={[
+                styles.categoryGrid,
+                errors.category ? { borderColor: '#D32F2F', borderWidth: 2, borderRadius: 12, padding: 10 } : { borderWidth: 0, padding: 0 }
+              ]}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {(() => {
+                    const availableCategories = CITY_CATEGORIES[city] || CATEGORIES.map(c => c.label);
+                    const availableCategoryObjects = CATEGORIES.filter(cat => availableCategories.includes(cat.label));
+                    return availableCategoryObjects.map(cat => {
+                      const isSelected = categories.includes(cat.label as Category);
+                      return (
+                        <TouchableOpacity
+                          key={cat.label}
+                          style={[
+                            styles.categoryChip,
+                            {
+                              backgroundColor: isSelected ? cat.color : theme.surface,
+                              borderColor: cat.color,
+                              borderWidth: 1.5,
+                            }
+                          ]}
+                          onPress={() => {
+                            if (isSelected) {
+                              if (categories.length > 1) setCategories(categories.filter(c => c !== cat.label));
+                            } else {
+                              setCategories([...categories, cat.label as Category]);
+                            }
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#fff' : theme.text }}>
+                            {cat.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    });
+                  })()}
+                </View>
+              </View>
+              {errors.category && (
+                <View style={styles.categoryError}>
+                  <MaterialIcons name="error" size={16} color="#D32F2F" />
+                  <Text style={styles.categoryErrorText}>{errors.category}</Text>
+                </View>
+              )}
+            </View>
+
+            <Field label="Description *" value={description} onChangeText={setDescription}
+              placeholder="Services proposés, horaires, spécialités..." multiline maxLength={600} error={errors.description} {...fp} />
+          </View>
+        )}
+
+        {/* STEP 1: Contact */}
+        {step === 1 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Field label="Téléphone *" value={phone} onChangeText={setPhone}
+              placeholder="+22670000000" keyboardType="phone-pad" error={errors.phone} {...fp} />
+            <Field label="WhatsApp" value={whatsapp} onChangeText={setWhatsapp}
+              placeholder="+22670000000 (si différent)" keyboardType="phone-pad" optional {...fp} />
+          </View>
+        )}
+
+        {/* STEP 2: Réseaux sociaux */}
+        {step === 2 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Field label="Facebook" value={facebook} onChangeText={setFacebook}
+              placeholder="Lien ou nom de la page" optional {...fp} />
+            <Field label="Instagram" value={instagram} onChangeText={setInstagram}
+              placeholder="@nomutilisateur" optional {...fp} />
+            <Field label="Site web" value={website} onChangeText={setWebsite}
+              placeholder="https://www.monentreprise.com" keyboardType="url" optional {...fp} />
+          </View>
+        )}
+
+        {/* STEP 3: Localisation */}
+        {step === 3 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.hint, { color: theme.textSecondary }]}>
+              Optionnel. Aidez vos clients à vous trouver.
+            </Text>
+            {location?.address || location?.latitude ? (
+              <View style={[styles.locationPreview, { backgroundColor: Colors.primary + '15', borderColor: Colors.primary + '40' }]}>
+                <Text style={{ fontSize: 20 }}>📍</Text>
+                <View style={{ flex: 1 }}>
+                  {location.address && <Text style={[styles.locationText, { color: theme.text }]} numberOfLines={2}>{location.address}</Text>}
+                  {location.latitude && <Text style={[styles.locationCoords, { color: theme.textSecondary }]}>GPS: {location.latitude.toFixed(4)}, {location.longitude?.toFixed(4)}</Text>}
+                </View>
+                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowLocationPicker(true); }}>
+                  <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 13 }}>Modifier</Text>
                 </TouchableOpacity>
               </View>
-            ))}
-            {photoUris.length < MAX_PHOTOS && (
-              <TouchableOpacity style={[styles.addPhotoBtn, { borderColor: Colors.primary }]} onPress={pickPhotos}>
-                <Text style={{ fontSize: 28 }}>📷</Text>
-                <Text style={[styles.addPhotoText, { color: Colors.primary }]}>Ajouter</Text>
+            ) : (
+              <TouchableOpacity style={[styles.addLocationBtn, { borderColor: Colors.primary }]}
+                onPress={() => { Keyboard.dismiss(); setShowLocationPicker(true); }}>
+                <Text style={{ fontSize: 24 }}>🗺️</Text>
+                <Text style={[styles.addLocationText, { color: Colors.primary }]}>Ajouter une localisation</Text>
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        )}
 
-        {/* UPLOAD PROGRESS */}
-        {loading && uploadProgress > 0 && uploadProgress < 100 && (
-          <View style={styles.progressBox}>
-            <Text style={[styles.progressText, { color: theme.textSecondary }]}>Upload photos: {uploadProgress}%</Text>
-            <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-              <View style={[styles.progressFill, { width: `${uploadProgress}%` as any }]} />
+        {/* STEP 4: Photos */}
+        {step === 4 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.hint, { color: theme.textSecondary }]}>
+              Jusqu'à {MAX_PHOTOS} photos. La première = couverture.
+            </Text>
+            <View style={styles.photoGrid}>
+              {photoUris.map((uri, i) => (
+                <View key={i} style={styles.photoThumbBox}>
+                  <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
+                  {i === 0 && (
+                    <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>Couverture</Text></View>
+                  )}
+                  <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(i)}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {photoUris.length < MAX_PHOTOS && (
+                <TouchableOpacity style={[styles.addPhotoBtn, { borderColor: Colors.primary }]} onPress={pickPhotos}>
+                  <Text style={{ fontSize: 28 }}>📷</Text>
+                  <Text style={[styles.addPhotoText, { color: Colors.primary }]}>Ajouter</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
 
-        {/* SUBMIT */}
-        <TouchableOpacity style={[styles.submitBtn, loading && { opacity: 0.6 }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-          {loading
-            ? <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <ActivityIndicator color="#1A1A1A" />
-                <Text style={styles.submitText}>Envoi en cours...</Text>
-              </View>
-            : <Text style={styles.submitText}>🚀  Soumettre mon entreprise</Text>
-          }
-        </TouchableOpacity>
+        {loading && uploadProgress > 0 && uploadProgress < 100 && (
+          <View style={styles.progressBox}>
+            <Text style={[{ color: theme.textSecondary, fontSize: 12, marginBottom: 6 }]}>Upload: {uploadProgress}%</Text>
+            <View style={[styles.uploadBar, { backgroundColor: theme.border }]}>
+              <View style={[styles.uploadFill, { width: `${uploadProgress}%` }]} />
+            </View>
+          </View>
+        )}
 
-        <View style={{ height: 40 }} />
+        {/* NAVIGATION - inside ScrollView so it stays above keyboard */}
+        <View style={[styles.navRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          {step > 0 && (
+            <TouchableOpacity style={[styles.backBtn, { backgroundColor: Colors.cta }]} onPress={handleBack}>
+              <Text style={styles.backBtnText}>← Retour</Text>
+            </TouchableOpacity>
+          )}
+          {step < STEPS.length - 1 ? (
+            <TouchableOpacity style={[styles.nextBtn, { backgroundColor: Colors.primary }]} onPress={handleNext}>
+              <Text style={styles.nextBtnText}>Suivant →</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[styles.nextBtn, { backgroundColor: Colors.primary }, loading && { opacity: 0.6 }]} onPress={handleSubmit} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextBtnText}>Soumettre</Text>}
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
 
-      <LocationPicker
-        visible={showLocationPicker}
-        current={location}
+      <LocationPicker visible={showLocationPicker} current={location}
         onConfirm={(loc) => { setLocation(loc); setShowLocationPicker(false); }}
-        onClose={() => setShowLocationPicker(false)}
-        theme={theme}
-      />
-      <PickerModal visible={showCategoryPicker} title="Catégorie" items={CATEGORIES.map(c => c.label)}
-        selected={category} onSelect={v => setCategory(v as Category)} onClose={() => setShowCategoryPicker(false)}
-        cardColor={theme.card} textColor={theme.text} secondaryColor={theme.textSecondary} />
+        onClose={() => setShowLocationPicker(false)} theme={theme} />
       <PickerModal visible={showCityPicker} title="Ville" items={CITIES}
         selected={city} onSelect={v => setCity(v as City)} onClose={() => setShowCityPicker(false)}
         cardColor={theme.card} textColor={theme.text} secondaryColor={theme.textSecondary} />
@@ -393,21 +551,32 @@ export default function AddBusinessScreen() {
 
 const THUMB = 96;
 const styles = StyleSheet.create({
+  progressBar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 8, justifyContent: 'center' },
+  progressDot: { width: 40, height: 6, borderRadius: 3 },
   content: { padding: 16 },
-  pendingNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1.5, borderRadius: 12, padding: 12, marginBottom: 14 },
-  pendingNoticeIcon: { fontSize: 18 },
-  pendingNoticeText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  formCard: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 14, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
-  formSection: { fontSize: 15, fontWeight: '800', marginBottom: 14 },
+  stepTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16 },
+  formCard: { borderRadius: 16, padding: 16, borderWidth: 1, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
   fieldWrapper: { marginBottom: 14 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '600' },
   optionalTag: { fontSize: 11, fontStyle: 'italic' },
-  input: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15 },
+  input: { borderWidth: 2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15 },
   textArea: { textAlignVertical: 'top', minHeight: 90 },
   errorText: { color: '#D32F2F', fontSize: 12, marginTop: 4 },
-  selector: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  photoHint: { fontSize: 12, marginBottom: 12, lineHeight: 18 },
+  categoryGrid: { marginTop: 8 },
+  categoryError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#FFEBEE', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  dupeWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FFF3E0', borderRadius: 10, padding: 12, marginTop: -6, marginBottom: 10, borderWidth: 1.5, borderColor: '#FFB300' },
+  dupeWarningTitle: { fontSize: 13, fontWeight: '800', color: '#E65100', marginBottom: 4 },
+  dupeWarningItem: { fontSize: 12, color: '#BF360C', lineHeight: 18 },
+  dupeWarningReason: { fontSize: 11, color: '#E65100', fontStyle: 'italic' },
+  categoryErrorText: { color: '#D32F2F', fontSize: 13, fontWeight: '700', flex: 1 },
+  selector: { borderWidth: 2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hint: { fontSize: 12, marginBottom: 12, lineHeight: 18 },
+  locationPreview: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
+  locationText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  locationCoords: { fontSize: 11, marginTop: 2 },
+  addLocationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 2, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 18 },
+  addLocationText: { fontSize: 15, fontWeight: '700' },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   photoThumbBox: { width: THUMB, height: THUMB, borderRadius: 10, overflow: 'hidden', position: 'relative' },
   photoThumb: { width: '100%', height: '100%' },
@@ -416,12 +585,14 @@ const styles = StyleSheet.create({
   removePhotoBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   addPhotoBtn: { width: THUMB, height: THUMB, borderRadius: 10, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
   addPhotoText: { fontSize: 11, fontWeight: '700' },
-  progressBox: { marginBottom: 14 },
-  progressText: { fontSize: 12, marginBottom: 6 },
-  progressBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
-  submitBtn: { backgroundColor: Colors.cta, paddingVertical: 16, borderRadius: 14, alignItems: 'center', elevation: 3, shadowColor: Colors.cta, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
-  submitText: { fontSize: 17, fontWeight: '800', color: '#1A1A1A' },
+  progressBox: { marginTop: 14 },
+  uploadBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  uploadFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
+  navRow: { flexDirection: 'row', gap: 12, padding: 16, marginTop: 16, borderRadius: 12, borderWidth: 1 },
+  backBtn: { flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  backBtnText: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  nextBtn: { flex: 2, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  nextBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
   pickerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 999 },
   pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32 },
   pickerTitle: { fontSize: 17, fontWeight: '800', marginBottom: 14 },
@@ -429,10 +600,9 @@ const styles = StyleSheet.create({
   pickerItemText: { fontSize: 15 },
   pickerClose: { marginTop: 8, padding: 14, alignItems: 'center' },
   pickerCloseText: { fontSize: 15, fontWeight: '600' },
-  locationPreview: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
-  locationPreviewIcon: { fontSize: 20 },
-  locationPreviewText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
-  locationPreviewCoords: { fontSize: 11, marginTop: 2 },
-  addLocationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 2, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 18 },
-  addLocationText: { fontSize: 15, fontWeight: '700' },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
 });

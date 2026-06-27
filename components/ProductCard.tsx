@@ -6,7 +6,7 @@ import {
   StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Product } from '../types';
+import { Product } from '../types/index';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { Colors } from '../constants';
 import { useAuth } from '../lib/AuthContext';
@@ -78,7 +78,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
       {/* Like button */}
       <TouchableOpacity
-        style={[styles.likeBtn, liked && { backgroundColor: '#ffebee' }]}
+        style={[styles.likeBtn, liked && { backgroundColor: '#b39da0c4' }]}
         onPress={handleLike}
         disabled={likeLoading}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

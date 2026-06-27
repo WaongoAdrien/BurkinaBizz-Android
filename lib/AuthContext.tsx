@@ -6,16 +6,17 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  deleteUser as firebaseDeleteUser,
   User as FirebaseUser,
   updateProfile,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { User } from '../types';
+import { User } from '../types/index2';
 
 // ── Put your Firebase Auth UID here after you first sign in as admin ──────────
 // In Firebase Console → Authentication → copy your UID → paste below
-export const ADMIN_UID = 'YOUR_ADMIN_UID_HERE';
+export const ADMIN_UID = 'mSnAilZG3Ra1oTrq2KhQsCBuLzB3';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
@@ -25,7 +26,8 @@ interface AuthContextType {
   isAdmin: boolean;
   isPending: boolean;
   isApprovedVendor: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<string>;
+  deleteAccount: () => Promise<void>;
   signUp: (email: string, password: string, name: string, phone: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -70,8 +72,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+  const signIn = async (email: string, password: string): Promise<string> => {
+    const { user: firebaseUser } = await signInWithEmailAndPassword(auth, email, password);
+    const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
+    return snap.exists() ? (snap.data() as User).role : 'pending';
+  };
+
+  const deleteAccount = async () => {
+    if (!user) return;
+    await deleteDoc(doc(db, 'users', user.uid));
+    await firebaseDeleteUser(user);
+    setUserProfile(null);
   };
 
   // New signups are PENDING until admin approves
@@ -107,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       user, userProfile, loading,
       isAdmin, isPending, isApprovedVendor,
-      signIn, signUp, signOut,
+      signIn, signUp, signOut, deleteAccount,
     }}>
       {children}
     </AuthContext.Provider>

@@ -10,6 +10,7 @@ android/
 google-services.json
 GoogleService-Info.plist
 google-play-service-account.json
+kosso-gym-00b786807f6b.json
 
 # Env files
 .env

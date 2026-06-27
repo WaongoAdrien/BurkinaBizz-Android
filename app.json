@@ -2,7 +2,7 @@
   "expo": {
     "name": "BurkinaBizz",
     "slug": "burkinabizz",
-    "version": "1.0.0",
+    "version": "2.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "burkinabizz",
@@ -16,11 +16,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.burkinabizz.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "BurkinaBizz a besoin de la camera pour prendre des photos.",
         "NSPhotoLibraryUsageDescription": "BurkinaBizz a besoin de vos photos pour importer des images.",
-        "NSLocationWhenInUseUsageDescription": "BurkinaBizz utilise votre position pour vous aider \u00e0 localiser votre entreprise sur la carte."
+        "NSLocationWhenInUseUsageDescription": "BurkinaBizz utilise votre position pour vous aider à localiser votre entreprise sur la carte.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -51,12 +52,22 @@
           "photosPermission": "BurkinaBizz a besoin de vos photos pour importer des images.",
           "cameraPermission": "BurkinaBizz a besoin de la camera pour prendre des photos."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "83adad94-4530-4582-8a50-10f6e49d8946"
+      },
+      "router": {
+        "origin": false
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/83adad94-4530-4582-8a50-10f6e49d8946"
     }
   }
 }

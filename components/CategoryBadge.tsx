@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Category, CategoryItem } from '../types';
+import { Category, CategoryItem } from '../types/index';
 import { CATEGORIES, Colors } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
 
@@ -45,7 +45,7 @@ export default function CategoryBadge({ category, onSelect, showAll = true }: Pr
             onPress={() => onSelect(item.label)}
           >
             <Text style={styles.emoji}>{item.icon}</Text>
-            <Text style={[styles.label, { color: active ? '#fff' : theme.text }]}>
+            <Text style={[styles.label, { color: active ? '#d8cdcd' : theme.text }]}>
               {item.label}
             </Text>
           </TouchableOpacity>
@@ -71,6 +71,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '900',
   },
 });

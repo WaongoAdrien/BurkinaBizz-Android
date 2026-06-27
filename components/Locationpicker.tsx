@@ -10,7 +10,7 @@ import {
 import { WebView } from 'react-native-webview';
 import * as ExpoLocation from 'expo-location';
 import { Colors } from '../constants';
-import { BusinessLocation } from '../types';
+import { BusinessLocation } from '../types/index2';
 
 interface Props {
   visible: boolean;

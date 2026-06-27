@@ -75,7 +75,7 @@ export default function PendingScreen() {
         {/* BROWSE BUTTON */}
         <TouchableOpacity
           style={[styles.browseBtn, { backgroundColor: Colors.primary }]}
-          onPress={() => router.push('/marketplace')}
+          onPress={() => router.push('/annuaire')}
         >
           <Text style={styles.browseBtnText}>🛒  Parcourir le marché</Text>
         </TouchableOpacity>

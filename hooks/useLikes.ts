@@ -8,7 +8,7 @@ import {
   onSnapshot, getDocs,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Product } from '../types';
+import { Product } from '../types/index2';
 
 export function useLikes(userId: string | undefined) {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());

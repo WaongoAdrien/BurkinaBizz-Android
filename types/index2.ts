@@ -10,14 +10,12 @@ export interface Business {
   id: string;
   name: string;
   category: Category;
-  categories?: Category[];     // NEW: Multiple categories
   description: string;
   city: City;
   phone: string;
   whatsapp?: string;
   facebook?: string;
   instagram?: string;
-  website?: string;        // NEW: business website URL
   photos: string[];        // array of image URLs
   coverPhoto: string;      // first photo or main image
   location?: BusinessLocation;  // optional GPS/address
@@ -25,9 +23,6 @@ export interface Business {
   ownerName: string;
   status: 'pending' | 'approved';
   createdAt: string | Date;
-  pinned?: boolean;        // admin pin to top
-  priority?: number;       // NEW: manual ordering (0-100, higher = appears first)
-    verified?: boolean;  // NEW: admin verified status
 }
 
 export interface User {
@@ -39,47 +34,29 @@ export interface User {
   createdAt?: string;
 }
 
-export interface Product {
-  id: string;
-  name: string;
-  description: string;
-  category: Category;
-  city: City;
-  imageUrl?: string;
-  price: number;
-  createdAt?: string | Date;
-}
-
-
 export type Category =
-  | 'Shopping'
+  | 'Alimentation'
   | 'Restauration'
   | 'Hôtellerie'
   |'Sport-Gym'
   | 'Résidence meublée'
   | 'Services'
-  | 'Electroniques'
-  | 'Coiffure & Beauté'
-  | 'Pharmacies'
+  | 'Transport'
+  | 'Mode-Beauté'
+  | 'Santé'
   | 'Produits Locaux'
-  | 'Soirées'
+  | 'Soirées au Faso'
   | 'Attractions'
   | 'Immobilier'
-  | 'Alimentation'
-  | 'Automobile'
-  | 'Autres';
+  | 'Autre';
 
 export type City =
   | 'Ouagadougou'
-  | 'Bobo-Dioulasso'
-  | 'China'
-  | 'New York'
-  | 'South Korea';
+  | 'Bobo-Dioulasso';
 
 export interface CategoryItem {
   label: Category;
   icon: string;
-  iconFamily: 'Ionicons' | 'MaterialCommunityIcons' | 'MaterialIcons';
   color: string;
 }
 

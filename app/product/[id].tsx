@@ -10,7 +10,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/AuthContext';
 import { useLikes } from '../../hooks/useLikes';
-import { Business } from '../../types';
+import { Business } from '../../types/index2';
 import { Colors, CATEGORIES, WHATSAPP_GREETING } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
 
@@ -56,7 +56,7 @@ export default function BusinessDetailScreen() {
   const openInstagram = () => {
     if (!business?.instagram) return;
     const handle = business.instagram.replace('@', '');
-    Linking.openURL(`https://instagram.com/${handle}`).catch(() => Alert.alert('Erreur', 'Impossible d ouvrir Instagram.'));
+    Linking.openURL(`https://instagram.com/${handle}`).catch(() => Alert.alert('Erreur', 'Impossible d ouvrir la page.'));
   };
 
   const openMaps = () => {
@@ -168,7 +168,7 @@ export default function BusinessDetailScreen() {
         </View>
 
         {/* CONTACT BUTTONS */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contacter</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contactez nous</Text>
         <View style={styles.contactRow}>
           {business.phone && (
             <TouchableOpacity style={[styles.contactBtn, { backgroundColor: Colors.primary }]} onPress={openPhone}>
@@ -177,7 +177,7 @@ export default function BusinessDetailScreen() {
             </TouchableOpacity>
           )}
           {(business.whatsapp || business.phone) && (
-            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: '#25D366' }]} onPress={openWhatsApp}>
+            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: '#285b3b' }]} onPress={openWhatsApp}>
               <Text style={styles.contactIcon}>💬</Text>
               <Text style={styles.contactBtnText}>WhatsApp</Text>
             </TouchableOpacity>

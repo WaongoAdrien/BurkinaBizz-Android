@@ -23,7 +23,7 @@ import {
   DocumentData,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Product, Category } from '../types';
+import { Product, Category } from '../types/index';
 import { Colors, CATEGORIES } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
 import ProductCard from '../components/ProductCard';
