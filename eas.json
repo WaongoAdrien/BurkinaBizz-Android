@@ -40,7 +40,7 @@
         "appleTeamId": "7ZYF5634AJ"
       },
       "android": {
-        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "serviceAccountKeyPath": "./kosso-gym-00b786807f6b.json",
         "track": "production"
       }
     }
