@@ -23,7 +23,7 @@
       "autoIncrement": true,
       "ios": {
         "credentialsSource": "remote",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "android": {
         "credentialsSource": "remote",

@@ -53,7 +53,8 @@
           "cameraPermission": "BurkinaBizz a besoin de la camera pour prendre des photos."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withFmtConstevalFix.js"
     ],
     "extra": {
       "eas": {
