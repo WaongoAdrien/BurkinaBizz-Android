@@ -1,12 +1,12 @@
 // app/admin/index.tsx — Admin Panel
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Modal,
   RefreshControl, ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -207,6 +207,7 @@ const isSameIgnoringSpacesAndPunct = (a: string, b: string) =>
 
 export default function AdminScreen() {
   const router = useRouter();
+  const deepLinkParams = useLocalSearchParams<{ tab?: string; editId?: string }>();
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { theme } = useColorTheme();
   const { t } = useTranslation();
@@ -320,6 +321,22 @@ export default function AdminScreen() {
     latitude: typeof item.latitude === 'number' ? item.latitude : null,
     longitude: typeof item.longitude === 'number' ? item.longitude : null,
   });
+
+  // Deep link from a tourist-site/event detail page's "edit" button (?tab=attractions|events&editId=...):
+  // switch to that tab and open the edit modal once the matching item has loaded in from Firestore.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    const kind: ContentKind | null =
+      deepLinkParams.tab === 'attractions' ? 'attractions' : deepLinkParams.tab === 'events' ? 'events' : null;
+    if (!kind || !deepLinkParams.editId) return;
+    const list = kind === 'attractions' ? attractions : events;
+    const item = list.find(i => i.id === deepLinkParams.editId);
+    if (!item) return;
+    setTab(kind);
+    openEditContent(kind, item);
+    deepLinkHandled.current = true;
+  }, [deepLinkParams.tab, deepLinkParams.editId, attractions, events]);
 
   const closeContentForm = () => setContentForm(prev => ({ ...prev, visible: false }));
 

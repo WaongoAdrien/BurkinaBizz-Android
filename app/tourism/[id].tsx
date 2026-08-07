@@ -5,12 +5,13 @@ import {
   View, Text, ScrollView, TouchableOpacity, Image, Share,
   StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants';
+import { useAuth } from '../../lib/AuthContext';
 import { useColorTheme } from '../../hooks/useColorTheme';
 import { ContentContainer } from '../../components/ContentContainer';
 import { AppHeader } from '../../components/AppHeader';
@@ -20,7 +21,7 @@ registerTranslations({
   'Site introuvable': 'Site not found',
   'Horaires': 'Hours',
   'À propos': 'About',
-  'Contacter': 'Contact',
+  'Informations': 'Information',
   'Appeler': 'Call',
   'Voir dans Maps': 'View on Maps',
   'Site web': 'Website',
@@ -70,6 +71,8 @@ const shStyles = StyleSheet.create({
 
 export default function TourismSiteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { isAdmin } = useAuth();
   const { theme } = useColorTheme();
   const { t } = useTranslation();
 
@@ -142,7 +145,14 @@ export default function TourismSiteDetailScreen() {
 
   return (
     <>
-      <AppHeader title={site.name} />
+      <AppHeader
+        title={site.name}
+        rightElement={isAdmin ? (
+          <TouchableOpacity onPress={() => router.push(`/admin?tab=attractions&editId=${site.id}`)} style={styles.headerBtn}>
+            <Ionicons name="create-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : undefined}
+      />
 
       <LinearGradient
         colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
@@ -224,7 +234,7 @@ export default function TourismSiteDetailScreen() {
             {/* CONTACT */}
             {hasContact && (
               <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
-                <SectionHeader icon="call" color={Colors.headerGradient[0]} title={t('Contacter')} theme={theme} />
+                <SectionHeader icon="information-circle-outline" color={Colors.headerGradient[0]} title={t('Informations')} theme={theme} />
                 <View style={styles.contactRow}>
                   {site.phone && (
                     <TouchableOpacity style={[styles.contactBtn, { backgroundColor: Colors.headerGradient[0] }]} onPress={openPhone}>
@@ -264,6 +274,7 @@ export default function TourismSiteDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBtn: { paddingHorizontal: 6 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorText: { fontSize: 16, fontWeight: '400' },
   photo: { height: 280, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
