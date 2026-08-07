@@ -1,24 +1,41 @@
 // components/TabBar.tsx — Bottom Tab Navigation
 
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { useAuth } from '../lib/AuthContext';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Accueil': 'Home',
+  'Annuaire': 'Directory',
+  'Tourisme': 'Tourism',
+  'Mon espace': 'My space',
+  'Connexion': 'Sign in',
+  'Paramètres': 'Settings',
+});
+
+// Brighter gold for the active tab — Colors.cta reads fine on light cards,
+// but it's too close in brightness to Colors.primary to stand out on the navbar.
+const NAV_ACCENT = '#F2B84B';
 
 export function TabBar() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme } = useColorTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
 
   // Hide TabBar on these screens
   const hideOnRoutes = [
     '/vendor/add-business',
     '/vendor/edit-business',
-    '/auth',
     '/vendor/pending',
     '/business/',  // Hide on business detail pages
   ];
@@ -31,6 +48,7 @@ export function TabBar() {
   const tabs = [
     { name: 'Accueil', icon: 'home', path: '/' },
     { name: 'Annuaire', icon: 'search', path: '/annuaire' },
+    { name: 'Tourisme', icon: 'camera', path: '/tourism-sites' },
     { name: user ? 'Mon espace' : 'Connexion', icon: user ? 'person' : 'log-in', path: user ? '/vendor/dashboard' : '/auth' },
     { name: 'Paramètres', icon: 'settings', path: '/settings' },
   ];
@@ -41,43 +59,41 @@ export function TabBar() {
   };
 
   return (
-    <View style={[
-      styles.container, 
-      { 
-        backgroundColor: Colors.primary, 
-        borderTopColor: theme.border,
-        maxWidth: 900,
-        alignSelf: 'center',
-        width: '100%',
-      }
-    ]}>
+    <LinearGradient
+      colors={Colors.headerGradient}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      style={[
+        styles.container,
+        {
+          borderTopColor: theme.border,
+          maxWidth: 900,
+          alignSelf: 'center',
+          width: '100%',
+          paddingBottom: Math.max(insets.bottom, 8) + 8,
+        }
+      ]}
+    >
       {tabs.map((tab) => {
         const active = isActive(tab.path);
         return (
           <TouchableOpacity
             key={tab.path}
-            style={[
-              styles.tab,
-              active && { 
-                backgroundColor: 'rgba(228, 220, 207, 0.2)', // Yellow with 20% opacity
-                borderRadius: 12,
-              }
-            ]}
+            style={styles.tab}
             onPress={() => router.push(tab.path as any)}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name={tab.icon as any} 
-              size={24} 
-              color={active ? Colors.cta : 'rgba(255,255,255,0.7)'} 
+            <Ionicons
+              name={tab.icon as any}
+              size={24}
+              color={active ? NAV_ACCENT : 'rgba(255,255,255,0.7)'}
             />
-            <Text style={[styles.label, { color: active ? Colors.cta : 'rgba(255,255,255,0.7)' }]}>
-              {tab.name}
+            <Text style={styles.label}>
+              {t(tab.name)}
             </Text>
           </TouchableOpacity>
         );
       })}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -86,7 +102,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     paddingTop: 8,
-    paddingBottom: 20, // Extra padding for iPhone notch/home indicator
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -105,6 +120,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.7)',
   },
 });

@@ -4,11 +4,18 @@
 // https://console.firebase.google.com → Project Settings → Your apps → Web app
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
+// Imported from @firebase/* directly (not the `firebase/*` wrapper packages):
+// the wrapper's package.json exports maps don't forward Metro's "react-native"
+// condition, so `firebase/app` and `@firebase/auth` (via `firebase/auth`) end
+// up resolved as separate ESM/CJS module instances with separate component
+// registries, causing "Component auth has not been registered yet". Importing
+// the @firebase/* packages directly keeps everything on one module instance.
+// See firebase/firebase-js-sdk#7615.
+import { initializeApp, getApps, getApp } from '@firebase/app';
+import { initializeAuth, getAuth, getReactNativePersistence } from '@firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getFirestore } from '@firebase/firestore';
+import { getStorage } from '@firebase/storage';
 
 const firebaseConfig = {
    apiKey: "AIzaSyD3hwZ_9RjDYsFKmxi1_FKf2Y_OZNQ2cEY",

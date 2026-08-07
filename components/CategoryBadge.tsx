@@ -5,6 +5,11 @@ import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Category, CategoryItem } from '../types/index';
 import { CATEGORIES, Colors } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Tous': 'All',
+});
 
 interface Props {
   category: Category | null;
@@ -14,6 +19,7 @@ interface Props {
 
 export default function CategoryBadge({ category, onSelect, showAll = true }: Props) {
   const { theme } = useColorTheme();
+  const { t } = useTranslation();
 
   return (
     <>
@@ -26,7 +32,7 @@ export default function CategoryBadge({ category, onSelect, showAll = true }: Pr
           onPress={() => onSelect(null)}
         >
           <Text style={[styles.label, { color: !category ? '#fff' : theme.text }]}>
-            Tous
+            {t('Tous')}
           </Text>
         </TouchableOpacity>
       )}
@@ -61,7 +67,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1.5,
     marginRight: 8,
     gap: 4,
@@ -71,6 +77,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '400',
   },
 });

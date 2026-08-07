@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   collection,
   query,
@@ -29,10 +30,27 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import ProductCard from '../components/ProductCard';
 import CategoryBadge from '../components/CategoryBadge';
 import EmptyState from '../components/EmptyState';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Impossible de charger les produits. Vérifiez votre connexion.': 'Unable to load products. Check your connection.',
+  'Erreur de connexion': 'Connection error',
+  'Réessayer': 'Retry',
+  'Rechercher un produit...': 'Search for a product...',
+  'produit trouvé': 'product found',
+  'produits trouvés': 'products found',
+  'dans': 'in',
+  'Chargement du marché...': 'Loading marketplace...',
+  'Aucun produit trouvé': 'No products found',
+  'Aucun produit dans': 'No products in',
+  'pour le moment.': 'for now.',
+  'Le marché est vide pour le moment. Revenez bientôt!': 'The marketplace is empty for now. Check back soon!',
+});
 
 export default function MarketplaceScreen() {
   const { category: paramCategory } = useLocalSearchParams<{ category?: string }>();
   const { theme } = useColorTheme();
+  const { t } = useTranslation();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [filtered, setFiltered] = useState<Product[]>([]);
@@ -75,7 +93,7 @@ export default function MarketplaceScreen() {
       },
       (err) => {
         console.error(err);
-        setError('Impossible de charger les produits. Vérifiez votre connexion.');
+        setError(t('Impossible de charger les produits. Vérifiez votre connexion.'));
         setLoading(false);
         setRefreshing(false);
       }
@@ -112,30 +130,36 @@ export default function MarketplaceScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <LinearGradient
+        colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+        style={styles.container}
+      >
         <EmptyState
           icon="📵"
-          title="Erreur de connexion"
+          title={t('Erreur de connexion')}
           subtitle={error}
         />
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: Colors.primary }]}
           onPress={() => setSelectedCategory(selectedCategory)}
         >
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Réessayer</Text>
+          <Text style={{ color: '#fff', fontWeight: '400' }}>{t('Réessayer')}</Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={styles.container}
+    >
       {/* SEARCH BAR */}
       <View style={[styles.searchWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Rechercher un produit..."
+          placeholder={t('Rechercher un produit...')}
           placeholderTextColor={theme.textSecondary}
           value={searchText}
           onChangeText={setSearchText}
@@ -166,8 +190,8 @@ export default function MarketplaceScreen() {
       {/* RESULTS COUNT */}
       {!loading && (
         <Text style={[styles.resultCount, { color: theme.textSecondary }]}>
-          {filtered.length} produit{filtered.length !== 1 ? 's' : ''} trouvé{filtered.length !== 1 ? 's' : ''}
-          {selectedCategory ? ` dans "${selectedCategory}"` : ''}
+          {filtered.length} {t(filtered.length !== 1 ? 'produits trouvés' : 'produit trouvé')}
+          {selectedCategory ? ` ${t('dans')} "${t(selectedCategory)}"` : ''}
         </Text>
       )}
 
@@ -176,7 +200,7 @@ export default function MarketplaceScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Chargement du marché...
+            {t('Chargement du marché...')}
           </Text>
         </View>
       ) : (
@@ -199,11 +223,11 @@ export default function MarketplaceScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="🛒"
-              title="Aucun produit trouvé"
+              title={t('Aucun produit trouvé')}
               subtitle={
                 selectedCategory
-                  ? `Aucun produit dans "${selectedCategory}" pour le moment.`
-                  : 'Le marché est vide pour le moment. Revenez bientôt!'
+                  ? `${t('Aucun produit dans')} "${t(selectedCategory)}" ${t('pour le moment.')}`
+                  : t('Le marché est vide pour le moment. Revenez bientôt!')
               }
             />
           }
@@ -214,7 +238,7 @@ export default function MarketplaceScreen() {
           initialNumToRender={4}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -227,7 +251,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     marginTop: 12,
-    borderRadius: 12,
+    borderRadius: 7,
     borderWidth: 1.5,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -248,7 +272,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     paddingHorizontal: 16,
     paddingBottom: 6,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   listContent: {
     paddingHorizontal: 10,
@@ -269,7 +293,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     marginHorizontal: 32,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 7,
     alignItems: 'center',
     marginBottom: 32,
   },

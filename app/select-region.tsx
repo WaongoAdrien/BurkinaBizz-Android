@@ -10,12 +10,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, CITY_INFO } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
-import { TabBar } from '../components/TabBar';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 
+registerTranslations({
+  'Recherchez par Région': 'Search by Region',
+  'Retrouvez les meuilleurs commerces et services par région.': 'Find the best businesses and services by region.',
+  'Voir les entreprises': 'View businesses',
+});
 
 export default function SelectRegionScreen() {
   const router = useRouter();
   const { theme } = useColorTheme();
+  const { t } = useTranslation();
   const gradientColors: readonly [string, string, ...string[]] =
     theme.backgroundGradient.length >= 2
       ? (theme.backgroundGradient as [string, string, ...string[]])
@@ -40,11 +46,15 @@ export default function SelectRegionScreen() {
         options={{
           title: 'Select Region',
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.primary },
+          headerBackground: () => (
+            <LinearGradient
+              colors={Colors.headerGradient}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ flex: 1 }}
+            />
+          ),
           headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '700' },
-          headerBackTitle: ' .',
-          headerBackTitleStyle: { fontSize: 100 },
+          headerTitleStyle: { fontWeight: '400' },
         }}
       />
 
@@ -55,9 +65,9 @@ export default function SelectRegionScreen() {
       >
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Recherchez par Région</Text>
+          <Text style={[styles.title, { color: theme.text }]}>{t('Recherchez par Région')}</Text>
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Retrouvez les meuilleurs commerces et services par région.
+            {t('Retrouvez les meuilleurs commerces et services par région.')}
           </Text>
         </View>
 
@@ -110,7 +120,7 @@ export default function SelectRegionScreen() {
 
                 {/* BROWSE BUTTON */}
                 <View style={[styles.browseBtn, { backgroundColor: Colors.primary }]}>
-                  <Text style={styles.browseBtnText}>Voir les entreprises</Text>
+                  <Text style={styles.browseBtnText}>{t('Voir les entreprises')}</Text>
                   <Ionicons name="arrow-forward" size={16} color="#fff" />
                 </View>
               </View>
@@ -120,7 +130,6 @@ export default function SelectRegionScreen() {
         
         <View style={{ height: 40 }} />
     </ScrollView>
-     <TabBar />
  </LinearGradient>
                      
 
@@ -142,7 +151,7 @@ const styles = StyleSheet.create({
   },
   title: { 
     fontSize: 18, 
-    fontWeight: '900', 
+    fontWeight: '400', 
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -159,7 +168,7 @@ const styles = StyleSheet.create({
   },
   
   regionCard: {
-    borderRadius: 16,
+    borderRadius: 10,
     borderWidth: 2,
     overflow: 'hidden',
     elevation: 4,
@@ -189,7 +198,7 @@ const styles = StyleSheet.create({
   },
   imageName: {
     fontSize: 19,
-    fontWeight: '900',
+    fontWeight: '400',
     color: '#fff',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
@@ -213,11 +222,11 @@ const styles = StyleSheet.create({
   cityBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 5,
   },
   cityBadgeText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '400',
   },
   
   browseBtn: {
@@ -226,12 +235,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 7,
     marginTop: 4,
   },
   browseBtnText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '400',
   },
 });

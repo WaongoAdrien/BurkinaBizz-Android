@@ -5,17 +5,30 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator, Image, StatusBar,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../lib/AuthContext';
 import { useLikes } from '../hooks/useLikes';
 import { Colors, CATEGORIES } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
-import { TabBar } from '../components/TabBar';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+import { AppHeader } from '../components/AppHeader';
+
+registerTranslations({
+  'Favoris ❤️': 'Favorites ❤️',
+  'Connexion requise': 'Login required',
+  'Connectez-vous pour sauvegarder vos entreprises favorites': 'Log in to save your favorite businesses',
+  '🔑 Se connecter': '🔑 Log in',
+  'Aucun favori': 'No favorites yet',
+  "Parcourez l'annuaire et appuyez sur ❤️ pour sauvegarder vos entreprises préférées": 'Browse the directory and tap ❤️ to save your favorite businesses',
+  "🔍 Parcourir l'annuaire": '🔍 Browse directory',
+});
 
 export default function LikedScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { theme } = useColorTheme();
+  const { t } = useTranslation();
   const { likedProducts: likedBusinesses, unlike, loading } = useLikes(user?.uid);
 
   const handleUnlike = (item: any) => {
@@ -43,7 +56,7 @@ export default function LikedScreen() {
               {item.name}
             </Text>
             <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
-              {cat?.icon} {item.category} • 📍 {item.city}
+              {cat?.icon} {t(item.category)} • 📍 {item.city}
             </Text>
             {item.phone && (
               <Text style={[styles.cardPhone, { color: theme.textSecondary }]}>
@@ -64,34 +77,39 @@ export default function LikedScreen() {
 
   if (!user) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <LinearGradient
+        colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-        <Stack.Screen options={{ title: 'Favoris ❤️', headerBackVisible: false }} />
+        <AppHeader title={t('Favoris ❤️')} />
         <View style={styles.emptyContainer}>
           <Text style={{ fontSize: 64 }}>🔑</Text>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>
-            Connexion requise
+            {t('Connexion requise')}
           </Text>
           <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-            Connectez-vous pour sauvegarder vos entreprises favorites
+            {t('Connectez-vous pour sauvegarder vos entreprises favorites')}
           </Text>
           <TouchableOpacity
             style={[styles.loginBtn, { backgroundColor: Colors.primary }]}
             onPress={() => router.push('/auth')}
           >
-            <Text style={styles.loginBtnText}>🔑 Se connecter</Text>
+            <Text style={styles.loginBtnText}>{t('🔑 Se connecter')}</Text>
           </TouchableOpacity>
         </View>
-        <TabBar />
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={styles.container}
+    >
       <StatusBar barStyle="dark-content" backgroundColor={theme.background} />
-      <Stack.Screen options={{ title: 'Favoris ❤️', headerBackVisible: false }} />
-      
+      <AppHeader title={t('Favoris ❤️')} />
+
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={Colors.primary} size="large" />
@@ -107,24 +125,23 @@ export default function LikedScreen() {
             <View style={styles.emptyContainer}>
               <Text style={{ fontSize: 64 }}>🤍</Text>
               <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                Aucun favori
+                {t('Aucun favori')}
               </Text>
               <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-                Parcourez l'annuaire et appuyez sur ❤️ pour sauvegarder vos entreprises préférées
+                {t("Parcourez l'annuaire et appuyez sur ❤️ pour sauvegarder vos entreprises préférées")}
               </Text>
               <TouchableOpacity
                 style={[styles.browseBtn, { backgroundColor: Colors.primary }]}
                 onPress={() => router.push('/annuaire')}
               >
-                <Text style={styles.browseBtnText}>🔍 Parcourir l'annuaire</Text>
+                <Text style={styles.browseBtnText}>{t("🔍 Parcourir l'annuaire")}</Text>
               </TouchableOpacity>
             </View>
           }
         />
       )}
-      
-      <TabBar />
-    </View>
+
+    </LinearGradient>
   );
 }
 
@@ -134,7 +151,7 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 24 },
   card: {
     flexDirection: 'row',
-    borderRadius: 12,
+    borderRadius: 7,
     borderWidth: 1,
     marginBottom: 10,
     overflow: 'hidden',
@@ -149,7 +166,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardInfo: { flex: 1, padding: 10, gap: 4, justifyContent: 'center' },
-  cardName: { fontSize: 14, fontWeight: '700' },
+  cardName: { fontSize: 14, fontWeight: '400' },
   cardMeta: { fontSize: 12 },
   cardPhone: { fontSize: 11 },
   unlikeBtn: {
@@ -165,7 +182,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  emptyTitle: { fontSize: 20, fontWeight: '400', textAlign: 'center' },
   emptySub: {
     fontSize: 14,
     textAlign: 'center',
@@ -175,15 +192,15 @@ const styles = StyleSheet.create({
   browseBtn: {
     paddingVertical: 14,
     paddingHorizontal: 28,
-    borderRadius: 12,
+    borderRadius: 7,
     marginTop: 8,
   },
-  browseBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  browseBtnText: { color: '#fff', fontSize: 15, fontWeight: '400' },
   loginBtn: {
     paddingVertical: 14,
     paddingHorizontal: 28,
-    borderRadius: 12,
+    borderRadius: 7,
     marginTop: 8,
   },
-  loginBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  loginBtnText: { color: '#fff', fontSize: 15, fontWeight: '400' },
 });

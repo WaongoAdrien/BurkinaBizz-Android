@@ -6,7 +6,7 @@ import {
   StyleSheet, ActivityIndicator, RefreshControl, Image,
   Keyboard, TouchableWithoutFeedback,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
@@ -16,9 +16,22 @@ import { useAuth } from '../lib/AuthContext';
 import { Business, Category } from '../types';
 import { Colors, CATEGORIES, CITIES, CITY_CATEGORIES } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
-import { TabBar } from '../components/TabBar';
 import { CategoryIcon } from '../components/CategoryIcon';
 import { ContentContainer } from '../components/ContentContainer';
+import { AppHeader } from '../components/AppHeader';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Rechercher une entreprise...': 'Search for a business...',
+  '🌍 Toutes les villes': '🌍 All cities',
+  '🌍 Tous': '🌍 All',
+  'entreprise trouvée': 'business found',
+  'entreprises trouvées': 'businesses found',
+  'Filtrer par description...': 'Filter by description...',
+  'Annuaire': 'Directory',
+  'Aucune entreprise trouvée': 'No businesses found',
+  "Essayez d'autres filtres ou revenez plus tard.": 'Try different filters or check back later.',
+});
 
 function ListHeader({
   theme, search, setSearch, activeCategory, setActiveCategory,
@@ -31,6 +44,7 @@ function ListHeader({
   descSearch: string; setDescSearch: (s: string) => void;
   router: any;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={{ width: '100%', alignItems: 'center' }}>
       <View style={{ width: '100%', maxWidth: 600, paddingHorizontal: 12, paddingTop: 12 }}>
@@ -40,7 +54,7 @@ function ListHeader({
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Rechercher une entreprise..."
+            placeholder={t('Rechercher une entreprise...')}
             placeholderTextColor={theme.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -69,7 +83,7 @@ function ListHeader({
                 activeOpacity={1}
               >
                 <Text style={[styles.cityChipText, { color: active ? Colors.primary : theme.textSecondary }]}>
-                  {item === 'Toutes' ? '🌍 Toutes les villes' : `📍 ${item}`}
+                  {item === 'Toutes' ? t('🌍 Toutes les villes') : `📍 ${item}`}
                 </Text>
               </TouchableOpacity>
             );
@@ -105,7 +119,7 @@ function ListHeader({
                 activeOpacity={1}
               >
                 <Text style={[styles.filterChipText, { color: active ? '#fff' : theme.text }]}>
-                  {item === 'Tous' ? '🌍 Tous' : item}
+                  {item === 'Tous' ? t('🌍 Tous') : item}
                 </Text>
               </TouchableOpacity>
             );
@@ -115,7 +129,7 @@ function ListHeader({
         {/* RESULTS COUNT */}
         {!loading && (
           <Text style={[styles.resultCount, { color: theme.textSecondary }]}>
-            {filteredCount} entreprise{filteredCount !== 1 ? 's' : ''} trouvée{filteredCount !== 1 ? 's' : ''}
+            {filteredCount} {t(filteredCount !== 1 ? 'entreprises trouvées' : 'entreprise trouvée')}
           </Text>
         )}
 
@@ -125,7 +139,7 @@ function ListHeader({
             <Text style={styles.descSearchIcon}>🔎</Text>
             <TextInput
               style={[styles.descSearchInput, { color: theme.text }]}
-              placeholder="Filtrer par description..."
+              placeholder={t('Filtrer par description...')}
               placeholderTextColor={theme.textSecondary}
               value={descSearch}
               onChangeText={setDescSearch}
@@ -150,7 +164,7 @@ export default function AnnuaireScreen() {
   const { theme, isDark } = useColorTheme();
   const { user } = useAuth();
   const { isLiked, toggleLike } = useLikes(user?.uid);
-  
+  const { t } = useTranslation();
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [filtered, setFiltered] = useState<Business[]>([]);
@@ -218,7 +232,12 @@ export default function AnnuaireScreen() {
 
   const renderBusiness = ({ item }: { item: Business }) => {
     const liked = isLiked(item.id);
-    const cat = CATEGORIES.find(c => c.label === item.category);
+    const displayCategory =
+      activeCategory !== 'Tous' &&
+      (item.category === activeCategory || item.categories?.includes(activeCategory))
+        ? activeCategory
+        : item.category;
+    const cat = CATEGORIES.find(c => c.label === displayCategory);
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -246,7 +265,7 @@ export default function AnnuaireScreen() {
               }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={{ fontSize: 16 }}>{liked ? '❤️' : '🤍'}</Text>
+              <Text style={{ fontSize: 12 }}>{liked ? '❤️' : '🤍'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -260,7 +279,7 @@ export default function AnnuaireScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 {cat && <CategoryIcon iconName={cat.icon} iconFamily={cat.iconFamily} size={14} color={cat.color} />}
                 <Text style={[styles.catBadgeText, { color: cat?.color || Colors.primary }]}>
-                  {item.category}
+                  {displayCategory}
                 </Text>
               </View>
             </View>
@@ -289,12 +308,8 @@ export default function AnnuaireScreen() {
       colors={(theme.backgroundGradient?.length >= 2 ? theme.backgroundGradient : [theme.background, theme.background]) as [string, string, ...string[]]}
       style={{ flex: 1 }}
     >
-      <Stack.Screen options={{
-        title: 'Annuaire',
-        headerBackVisible: true,
-        headerBackTitle: '',
-      }} />
-      
+      <AppHeader title={t('Annuaire')} />
+
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={Colors.primary} size="large" />
@@ -334,9 +349,9 @@ export default function AnnuaireScreen() {
               ListEmptyComponent={
                 <View style={styles.empty}>
                   <Text style={{ fontSize: 48 }}>📋</Text>
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Aucune entreprise trouvée</Text>
+                  <Text style={[styles.emptyTitle, { color: theme.text }]}>{t('Aucune entreprise trouvée')}</Text>
                   <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-                    Essayez d'autres filtres ou revenez plus tard.
+                    {t("Essayez d'autres filtres ou revenez plus tard.")}
                   </Text>
                 </View>
               }
@@ -346,41 +361,40 @@ export default function AnnuaireScreen() {
         </>
       )}
       
-      <TabBar />
     </LinearGradient>
     </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
-  searchBox: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 4, paddingVertical: 8 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, borderRadius: 7, borderWidth: 1.5, paddingHorizontal: 4, paddingVertical: 8 },
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
 
   filterRow: { paddingHorizontal: 6, paddingVertical: 2, gap: 6 },
-  filterChip: { height: 32, paddingHorizontal: 10, borderRadius: 12, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
-  filterChipText: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
-  cityChip: { height: 40, paddingHorizontal: 10, borderRadius: 14, borderWidth: 1, borderColor: '#E0E0E0', backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
-  cityChipText: { fontSize: 12, fontWeight: '500', lineHeight: 16 },
+  filterChip: { height: 32, paddingHorizontal: 10, borderRadius: 7, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  filterChipText: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
+  cityChip: { height: 40, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E0E0E0', backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  cityChipText: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
 
   resultCount: { fontSize: 12, paddingHorizontal: 6, paddingVertical: 4 },
-  descSearchBox: { flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 4, borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 8 },
+  descSearchBox: { flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 4, borderRadius: 6, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 8 },
   descSearchIcon: { fontSize: 14, marginRight: 6 },
   descSearchInput: { flex: 1, fontSize: 14, paddingVertical: 2 },
   listContent: { paddingHorizontal: 12, paddingBottom: 24, gap: 12 },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  card: { borderRadius: 12, borderWidth: 2, overflow: 'hidden', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, marginBottom: 4, backgroundColor: '#FAFAFA' },
+  card: { borderRadius: 7, borderWidth: 2, overflow: 'hidden', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, marginBottom: 4, backgroundColor: '#FAFAFA' },
   cardRow: { flexDirection: 'row', alignItems: 'stretch' },
-  cardImgBox: { width: 100, height: 100, position: 'relative' },
-  cardImg: { width: '100%', height: '100%' },
-  cardImgPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  likeBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 },
+  cardImgBox: { width: 100, alignSelf: 'stretch', position: 'relative' },
+  cardImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  cardImgPlaceholder: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  likeBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 7, padding: 4 },
   cardBody: { flex: 1, padding: 10, gap: 4 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  cardName: { fontSize: 14, fontWeight: '800', flex: 1, lineHeight: 18 },
-  catBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
-  catBadgeText: { fontSize: 10, fontWeight: '700' },
+  cardName: { fontSize: 14, fontWeight: '400', flex: 1, lineHeight: 18 },
+  catBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
+  catBadgeText: { fontSize: 10, fontWeight: '400' },
   cardDesc: { fontSize: 12, lineHeight: 16 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   cardCity: { fontSize: 11 },
@@ -388,7 +402,7 @@ const styles = StyleSheet.create({
   socialIcon: { fontSize: 12 },
 
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyTitle: { fontSize: 17, fontWeight: '400' },
   emptySub: { fontSize: 13, textAlign: 'center', paddingHorizontal: 32 },
   homeBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   homeBtnText: { fontSize: 22 },

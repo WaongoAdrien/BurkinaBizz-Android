@@ -5,7 +5,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   Alert, Image, ActivityIndicator, RefreshControl, StatusBar,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -14,8 +14,34 @@ import { useLikes } from '../../hooks/useLikes';
 import { Business } from '../../types';
 import { Colors, CATEGORIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
-import { TabBar } from '../../components/TabBar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
+import { AppHeader } from '../../components/AppHeader';
+
+registerTranslations({
+  'Supprimer': 'Delete',
+  'Annuler': 'Cancel',
+  'Erreur': 'Error',
+  'Impossible de supprimer.': 'Unable to delete.',
+  'Retirer des favoris?': 'Remove from favorites?',
+  'Retirer': 'Remove',
+  'de vos favoris?': 'from your favorites?',
+  'Publié': 'Published',
+  'En attente': 'Pending',
+  'Mon espace': 'My space',
+  'Utilisateur': 'User',
+  'Admin': 'Admin',
+  'Publiées': 'Published',
+  'Favoris': 'Favorites',
+  '+ Référencer mon entreprise': '+ List my business',
+  'Mes entreprises': 'My businesses',
+  'Aucune entreprise soumise': 'No business submitted',
+  "Appuyez sur \"Référencer\" pour ajouter votre entreprise à l'annuaire.": 'Tap "List" to add your business to the directory.',
+  'Aucun favori': 'No favorites',
+  "Parcourez l'annuaire et appuyez sur le cœur pour sauvegarder des entreprises.": 'Browse the directory and tap the heart to save businesses.',
+  "Voir l'annuaire": 'View directory',
+  "Voir plus d'entreprises": 'See more businesses',
+});
 
 type Tab = 'businesses' | 'liked';
 
@@ -30,6 +56,7 @@ export default function VendorDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('businesses');
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!user) { router.replace('/'); return; }
@@ -82,14 +109,14 @@ export default function VendorDashboardScreen() {
   }, [user]);
 
   const handleDelete = (b: Business) => {
-    Alert.alert('Supprimer', `Supprimer "${b.name}" ?`, [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('Supprimer'), `${t('Supprimer')} "${b.name}" ?`, [
+      { text: t('Annuler'), style: 'cancel' },
       {
-        text: 'Supprimer', style: 'destructive',
+        text: t('Supprimer'), style: 'destructive',
         onPress: async () => {
           setDeletingId(b.id);
           try { await deleteDoc(doc(db, 'businesses', b.id)); }
-          catch { Alert.alert('Erreur', 'Impossible de supprimer.'); }
+          catch { Alert.alert(t('Erreur'), t('Impossible de supprimer.')); }
           finally { setDeletingId(null); }
         },
       },
@@ -97,9 +124,9 @@ export default function VendorDashboardScreen() {
   };
 
   const handleUnlike = (b: any) => {
-    Alert.alert('Retirer des favoris?', `Retirer "${b.name}" de vos favoris?`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: '💔 Retirer', style: 'destructive', onPress: () => unlike(b.id) },
+    Alert.alert(t('Retirer des favoris?'), `${t('Retirer')} "${b.name}" ${t('de vos favoris?')}`, [
+      { text: t('Annuler'), style: 'cancel' },
+      { text: t('Retirer'), style: 'destructive', onPress: () => unlike(b.id) },
     ]);
   };
 
@@ -107,8 +134,13 @@ export default function VendorDashboardScreen() {
     <View style={[styles.statusBadge, {
       backgroundColor: status === 'approved' ? Colors.primary + '22' : Colors.cta + '22'
     }]}>
+      <MaterialIcons
+        name={status === 'approved' ? 'check-circle' : 'schedule'}
+        size={12}
+        color={status === 'approved' ? Colors.primary : Colors.cta}
+      />
       <Text style={[styles.statusText, { color: status === 'approved' ? Colors.primary : Colors.cta }]}>
-        {status === 'approved' ? '✓ Publié' : '⏳ En attente'}
+        {status === 'approved' ? t('Publié') : t('En attente')}
       </Text>
     </View>
   );
@@ -121,24 +153,27 @@ export default function VendorDashboardScreen() {
           {item.coverPhoto
             ? <Image source={{ uri: item.coverPhoto }} style={styles.thumb} resizeMode="cover" />
             : <View style={[styles.thumbPlaceholder, { backgroundColor: (cat?.color || Colors.primary) + '22' }]}>
-                <Text style={{ fontSize: 4 }}>{cat?.icon || '🏢'}</Text>
+                <MaterialIcons name={(cat?.icon as any) || 'store'} size={28} color={cat?.color || Colors.primary} />
               </View>
           }
           <View style={styles.cardInfo}>
             <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
-               {cat?.icon} {item.category} • 📍 {item.city}
-            </Text>
+            <View style={styles.metaRow}>
+              <MaterialIcons name={(cat?.icon as any) || 'store'} size={12} color={theme.textSecondary} />
+              <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>{item.category}</Text>
+              <MaterialIcons name="place" size={12} color={theme.textSecondary} />
+              <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>{item.city}</Text>
+            </View>
             <StatusBadge status={item.status} />
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.editBtn} onPress={() => router.push(`/vendor/edit-business?id=${item.id}`)}>
-          <Text style={{ fontSize: 16 }}>🔂</Text>
+          <MaterialIcons name="edit" size={18} color={Colors.primary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)} disabled={deletingId === item.id}>
           {deletingId === item.id
             ? <ActivityIndicator size="small" color="#D32F2F" />
-            : <Text style={{ fontSize: 18 }}>🗑️</Text>
+            : <MaterialIcons name="delete-outline" size={20} color="#D32F2F" />
           }
         </TouchableOpacity>
       </View>
@@ -153,19 +188,27 @@ export default function VendorDashboardScreen() {
           {item.coverPhoto
             ? <Image source={{ uri: item.coverPhoto }} style={styles.thumb} resizeMode="cover" />
             : <View style={[styles.thumbPlaceholder, { backgroundColor: (cat?.color || Colors.primary) + '22' }]}>
-                <Text style={{ fontSize: 24 }}>{cat?.icon || '🏢'}</Text>
+                <MaterialIcons name={(cat?.icon as any) || 'store'} size={28} color={cat?.color || Colors.primary} />
               </View>
           }
           <View style={styles.cardInfo}>
             <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
-              {cat?.icon} {item.category} • 📍 {item.city}
-            </Text>
-            {item.phone && <Text style={[styles.cardPhone, { color: theme.textSecondary }]}>📞 {item.phone}</Text>}
+            <View style={styles.metaRow}>
+              <MaterialIcons name={(cat?.icon as any) || 'store'} size={12} color={theme.textSecondary} />
+              <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>{item.category}</Text>
+              <MaterialIcons name="place" size={12} color={theme.textSecondary} />
+              <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>{item.city}</Text>
+            </View>
+            {item.phone && (
+              <View style={styles.metaRow}>
+                <MaterialIcons name="call" size={12} color={theme.textSecondary} />
+                <Text style={[styles.cardPhone, { color: theme.textSecondary }]}>{item.phone}</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.deleteBtn} onPress={() => handleUnlike(item)}>
-          <Text style={{ fontSize: 18 }}>💔</Text>
+          <MaterialIcons name="favorite" size={20} color="#E91E63" />
         </TouchableOpacity>
       </View>
     );
@@ -174,16 +217,15 @@ export default function VendorDashboardScreen() {
   if (!user) return null;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background } ]}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={styles.container}
+    >
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      <Stack.Screen options={{
-        title: 'Mon espace',
-        headerBackVisible: false,
-
-      }} />
+      <AppHeader title={t('Mon espace')} />
       {/* PROFILE CARD */}
       <LinearGradient
-        colors={['#5C6BC0', '#283593']}
+        colors={Colors.headerGradient}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={styles.profileCard}
       >
@@ -191,12 +233,13 @@ export default function VendorDashboardScreen() {
           <Text style={styles.avatarText}>{(userProfile?.name || user.email || 'U')[0].toUpperCase()}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.profileName}>{userProfile?.name || 'Utilisateur'}</Text>
+          <Text style={styles.profileName}>{userProfile?.name || t('Utilisateur')}</Text>
           <Text style={styles.profileEmail}>{user.email}</Text>
         </View>
         {isAdmin && (
           <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')}>
-            <Text style={styles.adminBtnText}>🛡️ Admin</Text>
+            <MaterialIcons name="admin-panel-settings" size={14} color="#fff" />
+            <Text style={styles.adminBtnText}>{t('Admin')}</Text>
           </TouchableOpacity>
         )}
       </LinearGradient>
@@ -205,23 +248,23 @@ export default function VendorDashboardScreen() {
       <View style={[styles.statsRow, { backgroundColor: isDark ? '#E8F5E9' : '#E8F5E9' }]}>
         <View style={styles.statItem}>
           <Text style={[styles.statNum, { color: Colors.primary }]}>{businesses.filter(b => b.status === 'approved').length}</Text>
-          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>Publiées</Text>
+          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>{t('Publiées')}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statNum, { color: Colors.cta }]}>{businesses.filter(b => b.status === 'pending').length}</Text>
-          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>En attente</Text>
+          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>{t('En attente')}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statNum, { color: '#E91E63' }]}>{likedBusinesses.length}</Text>
-          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>Favoris</Text>
+          <Text style={[styles.statLbl, { color: theme.textSecondary }]}>{t('Favoris')}</Text>
         </View>
       </View>
 
       {/* ADD BUTTON */}
       <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/vendor/add-business')} activeOpacity={0.85}>
-        <Text style={styles.addBtnText}>+ Référencer mon entreprise</Text>
+        <Text style={styles.addBtnText}>{t('+ Référencer mon entreprise')}</Text>
       </TouchableOpacity>
 
       {/* TABS */}
@@ -230,17 +273,23 @@ export default function VendorDashboardScreen() {
           style={[styles.tabBtn, tab === 'businesses' && { borderBottomColor: Colors.primary, borderBottomWidth: 2.5 }]}
           onPress={() => setTab('businesses')}
         >
-          <Text style={[styles.tabText, { color: tab === 'businesses' ? Colors.primary : theme.textSecondary }]}>
-            🏪 Mes entreprises ({businesses.length})
-          </Text>
+          <View style={styles.tabInner}>
+            <MaterialIcons name="storefront" size={15} color={tab === 'businesses' ? Colors.primary : theme.textSecondary} />
+            <Text style={[styles.tabText, { color: tab === 'businesses' ? Colors.primary : theme.textSecondary }]}>
+              {t('Mes entreprises')} ({businesses.length})
+            </Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabBtn, tab === 'liked' && { borderBottomColor: '#E91E63', borderBottomWidth: 2.5 }]}
           onPress={() => setTab('liked')}
         >
-          <Text style={[styles.tabText, { color: tab === 'liked' ? '#E91E63' : theme.textSecondary }]}>
-            ❤️ Favoris ({likedBusinesses.length})
-          </Text>
+          <View style={styles.tabInner}>
+            <MaterialIcons name="favorite" size={15} color={tab === 'liked' ? '#E91E63' : theme.textSecondary} />
+            <Text style={[styles.tabText, { color: tab === 'liked' ? '#E91E63' : theme.textSecondary }]}>
+              {t('Favoris')} ({likedBusinesses.length})
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -261,18 +310,18 @@ export default function VendorDashboardScreen() {
                 <View style={[styles.emptyIconCircle, { backgroundColor: Colors.primary + '18' }]}>
                   <MaterialIcons name="storefront" size={48} color={Colors.primary} />
                 </View>
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>Aucune entreprise soumise</Text>
-                <Text style={[styles.emptySub, { color: theme.textSecondary }]}>Appuyez sur "Référencer" pour ajouter votre entreprise à l'annuaire.</Text>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>{t('Aucune entreprise soumise')}</Text>
+                <Text style={[styles.emptySub, { color: theme.textSecondary }]}>{t("Appuyez sur \"Référencer\" pour ajouter votre entreprise à l'annuaire.")}</Text>
               </View>
             ) : (
               <View style={styles.empty}>
                 <View style={[styles.emptyIconCircle, { backgroundColor: '#FFEBEE' }]}>
                   <MaterialIcons name="favorite-border" size={48} color="#E53935" />
                 </View>
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>Aucun favori</Text>
-                <Text style={[styles.emptySub, { color: theme.textSecondary }]}>Parcourez l'annuaire et appuyez sur ❤️ pour sauvegarder des entreprises.</Text>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>{t('Aucun favori')}</Text>
+                <Text style={[styles.emptySub, { color: theme.textSecondary }]}>{t("Parcourez l'annuaire et appuyez sur le cœur pour sauvegarder des entreprises.")}</Text>
                 <TouchableOpacity style={[styles.browseBtn, { backgroundColor: Colors.primary }]} onPress={() => router.push('/annuaire')}>
-                  <Text style={styles.browseBtnText}>Voir l'annuaire</Text>
+                  <Text style={styles.browseBtnText}>{t("Voir l'annuaire")}</Text>
                 </TouchableOpacity>
               </View>
             )
@@ -280,59 +329,61 @@ export default function VendorDashboardScreen() {
           ListFooterComponent={
             tab === 'liked' && likedBusinesses.length > 0 ? (
               <TouchableOpacity style={[styles.moreBtn, { borderColor: Colors.primary }]} onPress={() => router.push('/annuaire')}>
-                <Text style={[styles.moreBtnText, { color: Colors.primary }]}>🔍 Voir plus d'entreprises</Text>
+                <MaterialIcons name="search" size={16} color={Colors.primary} />
+                <Text style={[styles.moreBtnText, { color: Colors.primary }]}>{t("Voir plus d'entreprises")}</Text>
               </TouchableOpacity>
             ) : null
           }
         />
       )}
-      
-      <TabBar />
-    </View>
+
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 , maxWidth: 900, alignSelf: 'center', width: '100%' },
-  profileCard: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 14, margin: 16, borderRadius: 16, elevation: 6, shadowColor: '#283593', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10 },
+  profileCard: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 14, margin: 16, borderRadius: 10, elevation: 6, shadowColor: Colors.headerGradient[0], shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
-  avatarText: { fontSize: 22, fontWeight: '800', color: '#fff' },
-  profileName: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  avatarText: { fontSize: 22, fontWeight: '400', color: '#fff' },
+  profileName: { fontSize: 16, fontWeight: '400', color: '#fff' },
   profileEmail: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
-  adminBtn: { backgroundColor: 'rgba(249,168,37,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7 },
-  adminBtnText: { color: '#fff', fontWeight: '800', fontSize: 11 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, marginHorizontal: 16, marginTop: 12, borderRadius: 12, paddingHorizontal: 16 },
+  adminBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(249,168,37,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4 },
+  adminBtnText: { color: '#fff', fontWeight: '400', fontSize: 11 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, marginHorizontal: 16, marginTop: 12, borderRadius: 7, paddingHorizontal: 16 },
   statItem: { flex: 1, alignItems: 'center' },
-  statNum: { fontSize: 20, fontWeight: '800' },
+  statNum: { fontSize: 20, fontWeight: '400' },
   statLbl: { fontSize: 11, marginTop: 2 },
   statDivider: { width: 1, height: 28, opacity: 0.4 },
-  addBtn: { backgroundColor: Colors.cta, marginHorizontal: 16, marginTop: 14, paddingVertical: 15, borderRadius: 12, alignItems: 'center', elevation: 2, shadowColor: Colors.cta, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6 },
-  addBtnText: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  addBtn: { backgroundColor: Colors.cta, marginHorizontal: 16, marginTop: 14, paddingVertical: 15, borderRadius: 7, alignItems: 'center', elevation: 2, shadowColor: Colors.cta, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6 },
+  addBtnText: { fontSize: 16, fontWeight: '400', color: '#1A1A1A' },
   tabRow: { flexDirection: 'row', marginTop: 14, borderBottomWidth: 1 },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabText: { fontSize: 13, fontWeight: '700' },
+  tabInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tabText: { fontSize: 13, fontWeight: '400' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
   listContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  card: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, marginBottom: 10, overflow: 'hidden', elevation: 1 },
+  card: { flexDirection: 'row', borderRadius: 7, borderWidth: 1, marginBottom: 10, overflow: 'hidden', elevation: 1 },
   cardInner: { flex: 1, flexDirection: 'row' },
   thumb: { width: 80, height: 80 },
   thumbPlaceholder: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
   cardInfo: { flex: 1, padding: 10, gap: 4, justifyContent: 'center' },
-  cardName: { fontSize: 14, fontWeight: '700' },
+  cardName: { fontSize: 14, fontWeight: '400' },
   cardMeta: { fontSize: 12 },
   cardPhone: { fontSize: 11 },
-  statusBadge: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  statusText: { fontSize: 11, fontWeight: '700' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
+  statusText: { fontSize: 11, fontWeight: '400' },
   editBtn: { padding: 8, alignItems: 'center', justifyContent: 'center', width: 40 },
   deleteBtn: { padding: 8, alignItems: 'center', justifyContent: 'center', width: 46 },
   empty: { alignItems: 'center', paddingTop: 48, gap: 12, paddingHorizontal: 24 },
   emptyIconCircle: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '400', textAlign: 'center' },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
-  browseBtn: { marginTop: 8, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12 },
-  browseBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  moreBtn: { marginHorizontal: 16, marginTop: 4, marginBottom: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 2, alignItems: 'center' },
-  moreBtnText: { fontSize: 15, fontWeight: '800' },
+  browseBtn: { marginTop: 8, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 7 },
+  browseBtnText: { color: '#fff', fontSize: 15, fontWeight: '400' },
+  moreBtn: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginHorizontal: 16, marginTop: 4, marginBottom: 8, paddingVertical: 14, borderRadius: 7, borderWidth: 2, alignItems: 'center' },
+  moreBtnText: { fontSize: 15, fontWeight: '400' },
   homeBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   homeBtnText: { fontSize: 22 },
 });

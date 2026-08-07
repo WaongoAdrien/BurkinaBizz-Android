@@ -14,10 +14,42 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { Colors } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+import { AppHeader } from '../components/AppHeader';
+
+registerTranslations({
+  'Nom requis': 'Name required',
+  'Numéro WhatsApp valide requis': 'Valid WhatsApp number required',
+  'Email invalide': 'Invalid email',
+  'Minimum 6 caractères': 'Minimum 6 characters',
+  'Email ou mot de passe incorrect': 'Incorrect email or password',
+  'Cet email est déjà utilisé': 'This email is already in use',
+  'Vérifiez votre connexion internet': 'Check your internet connection',
+  'Une erreur est survenue. Réessayez.': 'An error occurred. Please try again.',
+  'Erreur': 'Error',
+  'Connectez-vous à votre espace vendeur': 'Sign in to your seller space',
+  'Créez votre espace vendeur': 'Create your seller space',
+  'Connexion': 'Login',
+  'Inscription': 'Sign up',
+  'Nom complet': 'Full name',
+  'Votre nom': 'Your name',
+  'Numéro WhatsApp': 'WhatsApp number',
+  'Email': 'Email',
+  'vous@email.com': 'you@email.com',
+  'Mot de passe': 'Password',
+  'Votre compte sera examiné par notre équipe avant activation. Vous recevrez une confirmation.':
+    'Your account will be reviewed by our team before activation. You will receive a confirmation.',
+  'Se connecter': 'Sign in',
+  'Soumettre ma demande': 'Submit my request',
+  'Mot de passe oublié →': 'Forgot password →',
+  "En continuant, vous acceptez les conditions d'utilisation de BurkinaBizz.":
+    "By continuing, you agree to BurkinaBizz's terms of use.",
+});
 
 // Field MUST be outside AuthScreen — if defined inside, every keystroke
 // re-creates it, unmounting the TextInput and dropping focus after 1 char.
@@ -71,6 +103,7 @@ export default function AuthScreen() {
   const router = useRouter();
   const { signIn, signUp } = useAuth();
   const { theme } = useColorTheme();
+  const { t } = useTranslation();
 
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
@@ -85,11 +118,11 @@ export default function AuthScreen() {
 
   const validate = (): boolean => {
     const e: typeof errors = {};
-    if (!isLogin && !name.trim()) e.name = 'Nom requis';
+    if (!isLogin && !name.trim()) e.name = t('Nom requis');
     if (!isLogin && (!phone.trim() || phone.replace(/\D/g, '').length < 8))
-      e.phone = 'Numéro WhatsApp valide requis';
-    if (!email.trim() || !email.includes('@')) e.email = 'Email invalide';
-    if (password.length < 6) e.password = 'Minimum 6 caractères';
+      e.phone = t('Numéro WhatsApp valide requis');
+    if (!email.trim() || !email.includes('@')) e.email = t('Email invalide');
+    if (password.length < 6) e.password = t('Minimum 6 caractères');
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -113,13 +146,13 @@ export default function AuthScreen() {
     } catch (e: any) {
       const msg =
         e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password'
-          ? 'Email ou mot de passe incorrect'
+          ? t('Email ou mot de passe incorrect')
           : e.code === 'auth/email-already-in-use'
-          ? 'Cet email est déjà utilisé'
+          ? t('Cet email est déjà utilisé')
           : e.code === 'auth/network-request-failed'
-          ? 'Vérifiez votre connexion internet'
-          : 'Une erreur est survenue. Réessayez.';
-      Alert.alert('Erreur', msg);
+          ? t('Vérifiez votre connexion internet')
+          : t('Une erreur est survenue. Réessayez.');
+      Alert.alert(t('Erreur'), msg);
     } finally {
       setLoading(false);
     }
@@ -129,22 +162,22 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: theme.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <LinearGradient
+        colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+        style={{ flex: 1 }}
+      >
+      <AppHeader title={isLogin ? t('Connexion') : t('Inscription')} />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER */}
-        <View style={[styles.header, { backgroundColor: Colors.primary }]}>
-          <Text style={styles.headerEmoji}>🇧🇫</Text>
-          <Text style={styles.headerTitle}>BurkinaBizz</Text>
-          <Text style={styles.headerSub}>
-            {isLogin ? 'Connectez-vous à votre espace vendeur' : 'Créez votre espace vendeur'}
-          </Text>
-        </View>
+        <Text style={[styles.headerSub, { color: theme.textSecondary }]}>
+          {isLogin ? t('Connectez-vous à votre espace vendeur') : t('Créez votre espace vendeur')}
+        </Text>
 
         {/* FORM */}
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -152,39 +185,59 @@ export default function AuthScreen() {
           {/* TOGGLE */}
           <View style={[styles.toggleRow, { backgroundColor: theme.surface }]}>
             <TouchableOpacity
-              style={[styles.toggleBtn, isLogin && { backgroundColor: Colors.primary }]}
+              style={styles.toggleBtnWrap}
               onPress={() => { setIsLogin(true); setErrors({}); }}
             >
-              <Text style={[styles.toggleText, { color: isLogin ? '#fff' : theme.textSecondary }]}>
-                Connexion
-              </Text>
+              {isLogin ? (
+                <LinearGradient
+                  colors={Colors.headerGradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={styles.toggleBtn}
+                >
+                  <Text style={[styles.toggleText, { color: '#fff' }]}>{t('Connexion')}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.toggleBtn}>
+                  <Text style={[styles.toggleText, { color: theme.textSecondary }]}>{t('Connexion')}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.toggleBtn, !isLogin && { backgroundColor: Colors.primary }]}
+              style={styles.toggleBtnWrap}
               onPress={() => { setIsLogin(false); setErrors({}); }}
             >
-              <Text style={[styles.toggleText, { color: !isLogin ? '#fff' : theme.textSecondary }]}>
-                Inscription
-              </Text>
+              {!isLogin ? (
+                <LinearGradient
+                  colors={Colors.headerGradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={styles.toggleBtn}
+                >
+                  <Text style={[styles.toggleText, { color: '#fff' }]}>{t('Inscription')}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.toggleBtn}>
+                  <Text style={[styles.toggleText, { color: theme.textSecondary }]}>{t('Inscription')}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
           {!isLogin && (
             <>
-              <Field label="Nom complet" value={name} onChangeText={setName}
-                placeholder="Votre nom" iconName="person" error={errors.name} {...fp} />
-              <Field label="Numéro WhatsApp" value={phone} onChangeText={setPhone}
+              <Field label={t('Nom complet')} value={name} onChangeText={setName}
+                placeholder={t('Votre nom')} iconName="person" error={errors.name} {...fp} />
+              <Field label={t('Numéro WhatsApp')} value={phone} onChangeText={setPhone}
                 placeholder="+22670000000" keyboardType="phone-pad" iconName="phone"
                 error={errors.phone} {...fp} />
             </>
           )}
 
-          <Field label="Email" value={email} onChangeText={setEmail}
-            placeholder="vous@email.com" keyboardType="email-address" iconName="email"
+          <Field label={t('Email')} value={email} onChangeText={setEmail}
+            placeholder={t('vous@email.com')} keyboardType="email-address" iconName="email"
             error={errors.email} {...fp} />
 
           <Field
-            label="Mot de passe" value={password} onChangeText={setPassword}
+            label={t('Mot de passe')} value={password} onChangeText={setPassword}
             placeholder="••••••••" secureTextEntry={!showPassword} iconName="lock"
             error={errors.password} {...fp}
             rightComponent={
@@ -200,7 +253,7 @@ export default function AuthScreen() {
             <View style={[styles.approvalNote, { backgroundColor: Colors.cta + '22', borderColor: Colors.cta }]}>
               <Text style={styles.approvalNoteIcon}>⏳</Text>
               <Text style={[styles.approvalNoteText, { color: theme.text }]}>
-                Votre compte sera examiné par notre équipe avant activation. Vous recevrez une confirmation.
+                {t('Votre compte sera examiné par notre équipe avant activation. Vous recevrez une confirmation.')}
               </Text>
             </View>
           )}
@@ -221,7 +274,7 @@ export default function AuthScreen() {
                   color="#1A1A1A"
                 />
                 <Text style={styles.submitText}>
-                  {isLogin ? 'Se connecter' : 'Soumettre ma demande'}
+                  {isLogin ? t('Se connecter') : t('Soumettre ma demande')}
                 </Text>
               </View>
             )}
@@ -235,16 +288,17 @@ export default function AuthScreen() {
               onPress={() => router.push('/forgot-password')}
             >
               <Text style={[styles.forgotText, { color: Colors.primary }]}>
-                Mot de passe oublié →
+                {t('Mot de passe oublié →')}
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
         <Text style={[styles.footer, { color: theme.textSecondary }]}>
-          En continuant, vous acceptez les conditions d'utilisation de BurkinaBizz.
+          {t("En continuant, vous acceptez les conditions d'utilisation de BurkinaBizz.")}
         </Text>
       </ScrollView>
+      </LinearGradient>
     </KeyboardAvoidingView>
   );
 }
@@ -254,45 +308,44 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24, paddingTop: 32, paddingBottom: 24, alignItems: 'center',
   },
-  headerEmoji: { fontSize: 36 },
-  headerTitle: { fontSize: 28, fontWeight: '900', color: '#fff', marginTop: 6 },
-  headerSub: { fontSize: 13, color: '#A5D6A7', marginTop: 6, textAlign: 'center' },
+  headerSub: { fontSize: 13, textAlign: 'center', marginTop: 20, marginBottom: 4, paddingHorizontal: 24 },
   formCard: {
     marginHorizontal: 16, marginTop: 0, marginBottom: 16,
-    borderRadius: 18, borderTopLeftRadius: 0, borderTopRightRadius: 0,
+    borderRadius: 11, borderTopLeftRadius: 0, borderTopRightRadius: 0,
     padding: 20, borderWidth: 1,
     elevation: 3, shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
   toggleRow: {
-    flexDirection: 'row', borderRadius: 10, padding: 3, marginBottom: 20, overflow: 'hidden',
+    flexDirection: 'row', borderRadius: 6, padding: 3, marginBottom: 20, overflow: 'hidden',
   },
-  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  toggleText: { fontSize: 14, fontWeight: '700' },
+  toggleBtnWrap: { flex: 1 },
+  toggleBtn: { paddingVertical: 10, borderRadius: 5, alignItems: 'center' },
+  toggleText: { fontSize: 14, fontWeight: '400' },
   fieldWrapper: { marginBottom: 14 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  fieldLabel: { fontSize: 13, fontWeight: '400', marginBottom: 6 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
-    borderWidth: 2, borderRadius: 10, paddingHorizontal: 12,
+    borderWidth: 2, borderRadius: 6, paddingHorizontal: 12,
   },
   input: { flex: 1, paddingVertical: 13, fontSize: 15 },
   eyeBtn: { padding: 4 },
   errorText: { color: '#D32F2F', fontSize: 12, marginTop: 4 },
   forgotBtn: { alignSelf: 'flex-end', paddingVertical: 6, marginBottom: 8 },
-  forgotText: { fontSize: 13, fontWeight: '700', margin: 'auto', textDecorationLine: 'underline' },
+  forgotText: { fontSize: 13, fontWeight: '400', margin: 'auto', textDecorationLine: 'underline' },
   approvalNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 14,
+    borderWidth: 1.5, borderRadius: 6, padding: 12, marginBottom: 14,
   },
   approvalNoteIcon: { fontSize: 16 },
   approvalNoteText: { flex: 1, fontSize: 12, lineHeight: 18 },
   submitBtn: {
-    backgroundColor: Colors.cta, paddingVertical: 15, borderRadius: 12,
+    backgroundColor: Colors.cta, paddingVertical: 15, borderRadius: 7,
     alignItems: 'center', marginTop: 4,
     elevation: 2, shadowColor: Colors.cta,
     shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 6,
   },
-  submitText: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  submitText: { fontSize: 16, fontWeight: '400', color: '#1A1A1A' },
   footer: {
     textAlign: 'center', fontSize: 11, paddingHorizontal: 32, marginTop: 8, lineHeight: 16,
   },

@@ -6,6 +6,7 @@ import {
   StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/AuthContext';
@@ -13,6 +14,30 @@ import { useLikes } from '../../hooks/useLikes';
 import { Business } from '../../types/index2';
 import { Colors, CATEGORIES, WHATSAPP_GREETING } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
+import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
+
+registerTranslations({
+  'Entreprise introuvable': 'Business not found',
+  'Erreur': 'Error',
+  'Impossible douvrir Facebook.': 'Unable to open Facebook.',
+  'Impossible d ouvrir la page.': 'Unable to open the page.',
+  "Impossible douvrir Google Maps.": 'Unable to open Google Maps.',
+  'Connexion requise': 'Login required',
+  'Connectez-vous pour sauvegarder des favoris.': 'Log in to save favorites.',
+  'Se connecter': 'Log in',
+  'Annuler': 'Cancel',
+  'À propos': 'About',
+  'Contactez nous': 'Contact us',
+  'Appeler': 'Call',
+  'WhatsApp': 'WhatsApp',
+  'Réseaux sociaux': 'Social media',
+  'Facebook': 'Facebook',
+  'Instagram': 'Instagram',
+  'Localisation': 'Location',
+  'Ouvrir': 'Open',
+  'Téléphone': 'Phone',
+  'Ville': 'City',
+});
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +47,7 @@ export default function BusinessDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { isLiked, toggleLike } = useLikes(user?.uid);
+  const { t } = useTranslation();
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,22 +67,27 @@ export default function BusinessDetailScreen() {
     Linking.openURL(`tel:${business.phone}`);
   };
 
+  // Businesses created after strictWhatsapp was introduced only show the button
+  // when an explicit WhatsApp number was provided — no more assuming phone == WhatsApp.
+  // Older businesses (no strictWhatsapp flag) keep the legacy phone fallback.
+  const whatsappNumber = business?.whatsapp || (!business?.strictWhatsapp ? business?.phone : null);
+
   const openWhatsApp = () => {
-    if (!business?.whatsapp && !business?.phone) return;
-    const num = (business.whatsapp || business.phone).replace(/\D/g, '');
+    if (!whatsappNumber) return;
+    const num = whatsappNumber.replace(/\D/g, '');
     Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(WHATSAPP_GREETING)}`);
   };
 
   const openFacebook = () => {
     if (!business?.facebook) return;
     const url = business.facebook.startsWith('http') ? business.facebook : `https://facebook.com/${business.facebook}`;
-    Linking.openURL(url).catch(() => Alert.alert('Erreur', 'Impossible douvrir Facebook.'));
+    Linking.openURL(url).catch(() => Alert.alert(t('Erreur'), t('Impossible douvrir Facebook.')));
   };
 
   const openInstagram = () => {
     if (!business?.instagram) return;
     const handle = business.instagram.replace('@', '');
-    Linking.openURL(`https://instagram.com/${handle}`).catch(() => Alert.alert('Erreur', 'Impossible d ouvrir la page.'));
+    Linking.openURL(`https://instagram.com/${handle}`).catch(() => Alert.alert(t('Erreur'), t('Impossible d ouvrir la page.')));
   };
 
   const openMaps = () => {
@@ -70,13 +101,13 @@ export default function BusinessDetailScreen() {
       // Address → Google Maps search
       url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
     }
-    if (url) Linking.openURL(url).catch(() => Alert.alert('Erreur', "Impossible douvrir Google Maps."));
+    if (url) Linking.openURL(url).catch(() => Alert.alert(t('Erreur'), t("Impossible douvrir Google Maps.")));
   };
 
   const handleLike = async () => {
     if (!user) {
-      Alert.alert('Connexion requise', 'Connectez-vous pour sauvegarder des favoris.',
-        [{ text: 'Se connecter', onPress: () => router.push('/auth') }, { text: 'Annuler', style: 'cancel' }]);
+      Alert.alert(t('Connexion requise'), t('Connectez-vous pour sauvegarder des favoris.'),
+        [{ text: t('Se connecter'), onPress: () => router.push('/auth') }, { text: t('Annuler'), style: 'cancel' }]);
       return;
     }
     if (!business) return;
@@ -86,16 +117,22 @@ export default function BusinessDetailScreen() {
   };
 
   if (loading) return (
-    <View style={[styles.center, { backgroundColor: theme.background }]}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={styles.center}
+    >
       <ActivityIndicator color={Colors.primary} size="large" />
-    </View>
+    </LinearGradient>
   );
 
   if (!business) return (
-    <View style={[styles.center, { backgroundColor: theme.background }]}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={styles.center}
+    >
       <Text style={{ fontSize: 48 }}>😕</Text>
-      <Text style={[styles.errorText, { color: theme.text }]}>Entreprise introuvable</Text>
-    </View>
+      <Text style={[styles.errorText, { color: theme.text }]}>{t('Entreprise introuvable')}</Text>
+    </LinearGradient>
   );
 
   const cat = CATEGORIES.find(c => c.label === business.category);
@@ -103,7 +140,11 @@ export default function BusinessDetailScreen() {
   const photos = business.photos?.length ? business.photos : business.coverPhoto ? [business.coverPhoto] : [];
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
+    <LinearGradient
+      colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
+      style={{ flex: 1 }}
+    >
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
       {/* PHOTO GALLERY */}
       {photos.length > 0 ? (
@@ -163,23 +204,23 @@ export default function BusinessDetailScreen() {
 
         {/* DESCRIPTION */}
         <View style={[styles.section, { borderColor: theme.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>À propos</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('À propos')}</Text>
           <Text style={[styles.description, { color: theme.textSecondary }]}>{business.description}</Text>
         </View>
 
         {/* CONTACT BUTTONS */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Contactez nous</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('Contactez nous')}</Text>
         <View style={styles.contactRow}>
           {business.phone && (
             <TouchableOpacity style={[styles.contactBtn, { backgroundColor: Colors.primary }]} onPress={openPhone}>
               <Text style={styles.contactIcon}>📞</Text>
-              <Text style={styles.contactBtnText}>Appeler</Text>
+              <Text style={styles.contactBtnText}>{t('Appeler')}</Text>
             </TouchableOpacity>
           )}
-          {(business.whatsapp || business.phone) && (
+          {whatsappNumber && (
             <TouchableOpacity style={[styles.contactBtn, { backgroundColor: '#285b3b' }]} onPress={openWhatsApp}>
               <Text style={styles.contactIcon}>💬</Text>
-              <Text style={styles.contactBtnText}>WhatsApp</Text>
+              <Text style={styles.contactBtnText}>{t('WhatsApp')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -187,14 +228,14 @@ export default function BusinessDetailScreen() {
         {/* SOCIAL MEDIA */}
         {(business.facebook || business.instagram) && (
           <>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Réseaux sociaux</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('Réseaux sociaux')}</Text>
             <View style={styles.socialRow}>
               {business.facebook && (
                 <TouchableOpacity
                   style={[styles.socialBtn, { backgroundColor: '#1877F2' }]}
                   onPress={openFacebook}
                 >
-                  <Text style={styles.socialBtnText}>🔵 Facebook</Text>
+                  <Text style={styles.socialBtnText}>🔵 {t('Facebook')}</Text>
                 </TouchableOpacity>
               )}
               {business.instagram && (
@@ -202,7 +243,7 @@ export default function BusinessDetailScreen() {
                   style={[styles.socialBtn, { backgroundColor: '#E1306C' }]}
                   onPress={openInstagram}
                 >
-                  <Text style={styles.socialBtnText}>📸 Instagram</Text>
+                  <Text style={styles.socialBtnText}>📸 {t('Instagram')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -212,7 +253,7 @@ export default function BusinessDetailScreen() {
         {/* LOCATION */}
         {business.location && (business.location.address || business.location.latitude) && (
           <>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Localisation</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('Localisation')}</Text>
             <TouchableOpacity
               style={[styles.mapsBtn, { borderColor: theme.border }]}
               onPress={openMaps}
@@ -232,7 +273,7 @@ export default function BusinessDetailScreen() {
               </View>
               <View style={styles.mapsBtnIcon}>
                 <Text style={{ fontSize: 22 }}>🗺️</Text>
-                <Text style={styles.mapsBtnIconText}>Ouvrir</Text>
+                <Text style={styles.mapsBtnIconText}>{t('Ouvrir')}</Text>
               </View>
             </TouchableOpacity>
           </>
@@ -240,14 +281,15 @@ export default function BusinessDetailScreen() {
 
         {/* CONTACT INFO */}
         <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          {business.phone && <InfoRow icon="📞" label="Téléphone" value={business.phone} theme={theme} />}
-          {business.whatsapp && <InfoRow icon="💬" label="WhatsApp" value={business.whatsapp} theme={theme} />}
-          {business.facebook && <InfoRow icon="🔵" label="Facebook" value={business.facebook} theme={theme} />}
-          {business.instagram && <InfoRow icon="📸" label="Instagram" value={business.instagram} theme={theme} />}
-          <InfoRow icon="📍" label="Ville" value={business.city} theme={theme} />
+          {business.phone && <InfoRow icon="📞" label={t('Téléphone')} value={business.phone} theme={theme} />}
+          {business.whatsapp && <InfoRow icon="💬" label={t('WhatsApp')} value={business.whatsapp} theme={theme} />}
+          {business.facebook && <InfoRow icon="🔵" label={t('Facebook')} value={business.facebook} theme={theme} />}
+          {business.instagram && <InfoRow icon="📸" label={t('Instagram')} value={business.instagram} theme={theme} />}
+          <InfoRow icon="📍" label={t('Ville')} value={business.city} theme={theme} />
         </View>
       </View>
     </ScrollView>
+    </LinearGradient>
   );
 }
 
@@ -265,39 +307,39 @@ const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
   icon: { fontSize: 16, width: 24 },
   label: { fontSize: 13, width: 90 },
-  value: { flex: 1, fontSize: 13, fontWeight: '600', textAlign: 'right' },
+  value: { flex: 1, fontSize: 13, fontWeight: '400', textAlign: 'right' },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontSize: 16, fontWeight: '700' },
+  errorText: { fontSize: 16, fontWeight: '400' },
   photo: { height: 280 },
   photoPlaceholder: { height: 220, alignItems: 'center', justifyContent: 'center' },
   dotRow: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   body: { padding: 16, gap: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  name: { fontSize: 22, fontWeight: '900', lineHeight: 28 },
+  name: { fontSize: 22, fontWeight: '500', lineHeight: 28 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
-  catBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  catBadgeText: { fontSize: 12, fontWeight: '700' },
+  catBadge: { borderRadius: 5, paddingHorizontal: 10, paddingVertical: 4 },
+  catBadgeText: { fontSize: 12, fontWeight: '400' },
   city: { fontSize: 13 },
   likeBtn: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
   section: { borderTopWidth: 1, paddingTop: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 10 },
+  sectionTitle: { fontSize: 16, fontWeight: '400', marginBottom: 10 },
   description: { fontSize: 14, lineHeight: 22 },
   contactRow: { flexDirection: 'row', gap: 10 },
-  contactBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 6 },
+  contactBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 7, gap: 6 },
   contactIcon: { fontSize: 18 },
-  contactBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  contactBtnText: { color: '#fff', fontSize: 15, fontWeight: '400' },
   socialRow: { flexDirection: 'row', gap: 10 },
-  socialBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12 },
-  socialBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  infoCard: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 14 },
-  mapsBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 14, padding: 14, gap: 12, marginBottom: 4 },
-  mapsBtnAddress: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  socialBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 7 },
+  socialBtnText: { color: '#fff', fontSize: 14, fontWeight: '400' },
+  infoCard: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 14 },
+  mapsBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 8, padding: 14, gap: 12, marginBottom: 4 },
+  mapsBtnAddress: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
   mapsBtnCoords: { fontSize: 11, marginTop: 2 },
   mapsBtnIcon: { alignItems: 'center', gap: 2 },
-  mapsBtnIconText: { fontSize: 11, color: '#1976D2', fontWeight: '700' },
+  mapsBtnIconText: { fontSize: 11, color: '#1976D2', fontWeight: '400' },
 });

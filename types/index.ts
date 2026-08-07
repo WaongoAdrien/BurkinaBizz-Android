@@ -15,6 +15,7 @@ export interface Business {
   city: City;
   phone: string;
   whatsapp?: string;
+  strictWhatsapp?: boolean; // NEW: when true, don't fall back to `phone` for the WhatsApp button — only businesses created after this flag was introduced have it
   facebook?: string;
   instagram?: string;
   website?: string;        // NEW: business website URL

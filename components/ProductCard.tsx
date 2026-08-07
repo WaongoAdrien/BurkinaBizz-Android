@@ -11,6 +11,16 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { Colors } from '../constants';
 import { useAuth } from '../lib/AuthContext';
 import { likeProduct, unlikeProduct, subscribeLikes } from '../lib/likes';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Connexion requise': 'Sign-in required',
+  'Connectez-vous pour sauvegarder des favoris.': 'Sign in to save favorites.',
+  'Annuler': 'Cancel',
+  'Se connecter': 'Sign in',
+  'Erreur': 'Error',
+  'Impossible de modifier vos favoris.': 'Unable to update your favorites.',
+});
 
 interface ProductCardProps {
   product: Product;
@@ -20,6 +30,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const { theme } = useColorTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [liked, setLiked] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
@@ -31,9 +42,9 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleLike = async () => {
     if (!user) {
-      Alert.alert('Connexion requise', 'Connectez-vous pour sauvegarder des favoris.', [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Se connecter', onPress: () => router.push('/auth') },
+      Alert.alert(t('Connexion requise'), t('Connectez-vous pour sauvegarder des favoris.'), [
+        { text: t('Annuler'), style: 'cancel' },
+        { text: t('Se connecter'), onPress: () => router.push('/auth') },
       ]);
       return;
     }
@@ -52,7 +63,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         });
       }
     } catch {
-      Alert.alert('Erreur', 'Impossible de modifier vos favoris.');
+      Alert.alert(t('Erreur'), t('Impossible de modifier vos favoris.'));
     } finally {
       setLikeLoading(false);
     }
@@ -102,7 +113,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14, overflow: 'hidden',
+    borderRadius: 8, overflow: 'hidden',
     marginBottom: 12, marginHorizontal: 6, flex: 1, borderWidth: 1,
     elevation: 2, shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -112,18 +123,18 @@ const styles = StyleSheet.create({
   badge: {
     position: 'absolute', top: 8, left: 8,
     backgroundColor: Colors.primary + 'DD',
-    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3,
   },
-  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '400' },
   likeBtn: {
     position: 'absolute', top: 8, right: 8,
     backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 18, width: 32, height: 32,
+    borderRadius: 11, width: 32, height: 32,
     alignItems: 'center', justifyContent: 'center',
   },
   likeIcon: { fontSize: 16 },
   info: { padding: 10, gap: 4 },
-  name: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  name: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
   city: { fontSize: 12 },
-  price: { fontSize: 15, fontWeight: '800', color: Colors.primary, marginTop: 2 },
+  price: { fontSize: 15, fontWeight: '400', color: Colors.primary, marginTop: 2 },
 });

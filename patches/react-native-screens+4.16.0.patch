@@ -1,0 +1,30 @@
+diff --git a/node_modules/react-native-screens/ios/RNSScreenStackHeaderConfig.mm b/node_modules/react-native-screens/ios/RNSScreenStackHeaderConfig.mm
+index 57ff861..dadef78 100644
+--- a/node_modules/react-native-screens/ios/RNSScreenStackHeaderConfig.mm
++++ b/node_modules/react-native-screens/ios/RNSScreenStackHeaderConfig.mm
+@@ -678,11 +678,25 @@ + (void)updateViewController:(UIViewController *)vc
+         navitem.leftItemsSupplementBackButton = config.backButtonInCustomView;
+ #endif
+         UIBarButtonItem *buttonItem = [[UIBarButtonItem alloc] initWithCustomView:subview];
++#if RNS_IPHONE_OS_VERSION_AVAILABLE(26_0)
++        if (@available(iOS 26.0, *)) {
++          // Prevent UIKit from wrapping custom header views in the iOS 26 "Liquid Glass"
++          // circular background — we render our own icon/background in JS.
++          buttonItem.hidesSharedBackground = YES;
++          buttonItem.sharesBackground = NO;
++        }
++#endif
+         navitem.leftBarButtonItem = buttonItem;
+         break;
+       }
+       case RNSScreenStackHeaderSubviewTypeRight: {
+         UIBarButtonItem *buttonItem = [[UIBarButtonItem alloc] initWithCustomView:subview];
++#if RNS_IPHONE_OS_VERSION_AVAILABLE(26_0)
++        if (@available(iOS 26.0, *)) {
++          buttonItem.hidesSharedBackground = YES;
++          buttonItem.sharesBackground = NO;
++        }
++#endif
+         navitem.rightBarButtonItem = buttonItem;
+         break;
+       }

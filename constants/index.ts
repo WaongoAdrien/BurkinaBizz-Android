@@ -3,30 +3,33 @@
 import { Category, CategoryItem, City } from '../types/index';
 
 export const Colors = {
-  primary: '#2E7D32',       // Forest green - main brand color
-  primaryLight: '#66BB6A',  // Lighter, more vibrant green
-  primaryDark: '#1B5E20',   // Deep forest green
-  cta: '#FFA726',          // Warm orange for call-to-action
-  white: '#FFFFFF',
-  black: '#1A1A1A',        // Softer black for better readability
-  
+  primary: '#2B617C',
+  primaryLight: '#7FA8BB',
+  primaryDark: '#163B4B',
+  cta: '#987528',
+  white: '#ffffffbf',
+  black: '#1A1A1A',
+
+  // Dark blue gradient used on the navbar and screen headers.
+  headerGradient: ['#0B1E3D', '#1E4D78'] as [string, string],
+
   light: {
-    background: '#d2dfc0',    // Fallback solid color
-    backgroundGradient: ['#e1ebdf', '#dcdec0', '#b5e49d'], // Gradient array
-    surface: '#ffffff',       // Pure white surfaces (no transparency)
-    text: '#1A1A1A',          // Dark text
-    textSecondary: '#252629fc', // Cool gray for secondary text
-    border: '#E5E7EB',        // Light gray borders
-    card: '#FFFFFF',          // Pure white cards for clarity
+    background: '#e8ecf0',
+    backgroundGradient: [ '#e8ecf0','#e8ecf0'],
+    surface: '#FCF9F9',
+    text: '#1A1A1A',
+    textSecondary: '#252629fc',
+    border: '#E5E7EB',
+    card: '#FFFFFF',
   },
   dark: {
-    background: '#c4e1b8',    // Fallback solid color
-    backgroundGradient: ['#e1ebdf', '#dcdec0', '#b5e49d'], // Gradient array
-    surface: '#FFFFFF',       // Pure white surfaces (no transparency)
-    text: '#1A1A1A',          // Dark text
-    textSecondary: '#252629fc', // Cool gray for secondary text
-    border: '#E5E7EB',        // Light gray borders
-    card: '#FFFFFF',          // Pure white cards for clarity
+    background: '#e8ecf0',
+    backgroundGradient: [ '#e8ecf0','#e8ecf0'],
+    surface: '#FCF9F9',
+    text: '#1A1A1A',
+    textSecondary: '#252629fc',
+    border: '#E5E7EB',
+    card: '#FFFFFF',
   },
 };
 

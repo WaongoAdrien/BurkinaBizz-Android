@@ -14,8 +14,12 @@ import { useAuth } from '../lib/AuthContext';
 import { Business, Category } from '../types';
 import { Colors, CATEGORIES, CITY_CATEGORIES } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
-import { TabBar } from '../components/TabBar';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+
+registerTranslations({
+  'Annuaire New York': 'New York Directory',
+});
 
 const NEWYORK_CATEGORIES = CITY_CATEGORIES['New York'] || ['Automobile', 'Diverse', 'Other', 'Services'];
 
@@ -24,6 +28,7 @@ export default function AnnuaireNewYorkScreen() {
   const { theme, isDark } = useColorTheme();
   const { user } = useAuth();
   const { isLiked, toggleLike } = useLikes(user?.uid);
+  const { t } = useTranslation();
   const gradientColors: readonly [string, string, ...string[]] =
     theme.backgroundGradient.length >= 2
       ? (theme.backgroundGradient as [string, string, ...string[]])
@@ -159,7 +164,7 @@ export default function AnnuaireNewYorkScreen() {
       style={{ flex: 1, maxWidth: 900, alignSelf: 'center', width: '100%' }}
     >
       <Stack.Screen options={{
-        title: 'Annuaire New York',
+        title: t('Annuaire New York'),
         headerShown: true,
       }} />
       
@@ -261,7 +266,6 @@ export default function AnnuaireNewYorkScreen() {
         </>
       )}
       
-      <TabBar />
     </LinearGradient>
   );
 }
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     padding: 16, 
-    borderRadius: 12, 
+    borderRadius: 7, 
     borderWidth: 2,
     marginTop: 12,
     marginBottom: 12,
@@ -281,32 +285,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  regionToggleTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  regionToggleSub: { fontSize: 13, fontWeight: '500' },
+  regionToggleTitle: { fontSize: 16, fontWeight: '400', marginBottom: 2 },
+  regionToggleSub: { fontSize: 13, fontWeight: '400' },
   
-  searchBox: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 2, marginBottom: 4, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 8 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 2, marginBottom: 4, borderRadius: 7, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 8 },
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
 
   filterRow: { paddingHorizontal: 2, paddingVertical: 2, gap: 6 },
-  filterChip: { height: 42, paddingHorizontal: 22, borderRadius: 16, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
-  filterChipText: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  filterChip: { height: 42, paddingHorizontal: 22, borderRadius: 10, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  filterChipText: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
 
   resultCount: { fontSize: 12, paddingHorizontal: 6, paddingVertical: 4 },
   listContent: { paddingHorizontal: 12, paddingBottom: 24, gap: 12 },
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  card: { borderRadius: 12, borderWidth: 2, overflow: 'hidden', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, marginBottom: 4, backgroundColor: '#FAFAFA' },
+  card: { borderRadius: 7, borderWidth: 2, overflow: 'hidden', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, marginBottom: 4, backgroundColor: '#FAFAFA' },
   cardRow: { flexDirection: 'row', alignItems: 'stretch' },
   cardImgBox: { width: 100, height: 100, position: 'relative' },
   cardImg: { width: '100%', height: '100%' },
   cardImgPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  likeBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 },
+  likeBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 7, padding: 4 },
   cardBody: { flex: 1, padding: 10, gap: 4 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  cardName: { fontSize: 14, fontWeight: '800', flex: 1, lineHeight: 18 },
-  catBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
-  catBadgeText: { fontSize: 10, fontWeight: '700' },
+  cardName: { fontSize: 14, fontWeight: '400', flex: 1, lineHeight: 18 },
+  catBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
+  catBadgeText: { fontSize: 10, fontWeight: '400' },
   cardDesc: { fontSize: 12, lineHeight: 16 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   cardCity: { fontSize: 11 },
@@ -314,6 +318,6 @@ const styles = StyleSheet.create({
   socialIcon: { fontSize: 12 },
 
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyTitle: { fontSize: 17, fontWeight: '400' },
   emptySub: { fontSize: 13, textAlign: 'center', paddingHorizontal: 32 },
 });

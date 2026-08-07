@@ -27,10 +27,13 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.resource.data.status == 'pending'
                     && request.resource.data.ownerId == request.auth.uid;
-      // Owner can update their own (not status), admin can update anything
+      // Owner can update their own (not status), admin can update anything,
+      // any signed-in user can bump the aggregate rating fields when they review
       allow update: if (isSignedIn() && resource.data.ownerId == request.auth.uid
                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']))
-                    || isAdmin();
+                    || isAdmin()
+                    || (isSignedIn()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingSum', 'ratingCount']));
       allow delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
                     || isAdmin();
     }
@@ -38,6 +41,42 @@ service cloud.firestore {
     // ── LIKES ────────────────────────────────────────────────────────────
     match /likes/{userId}/items/{businessId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── REVIEWS ──────────────────────────────────────────────────────────
+    match /reviews/{businessId}/items/{reviewId} {
+      // Anyone can read reviews (public, matches business detail page)
+      allow read: if true;
+      // Any signed-in user can leave a review, attributed to themselves
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Only the author can edit their own review (userId can't be reassigned)
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId;
+      // Author can delete their own review, admin can delete any review
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid)
+                    || isAdmin();
+    }
+
+    // ── TOURIST SITES ────────────────────────────────────────────────────
+    match /touristSites/{siteId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── EVENTS ───────────────────────────────────────────────────────────
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── REPORTS ──────────────────────────────────────────────────────────
+    match /reports/{reportId} {
+      // Only admins can view the moderation queue
+      allow read: if isAdmin();
+      // Any signed-in user can file a report, attributed to themselves
+      allow create: if isSignedIn() && request.resource.data.reportedBy == request.auth.uid;
+      // Only admin can dismiss/resolve (delete) a report
+      allow delete: if isAdmin();
     }
   }
 }
