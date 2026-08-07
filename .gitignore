@@ -19,3 +19,6 @@ kosso-gym-00b786807f6b.json
 
 # EAS
 .eas/
+
+# Personal scratch notes — never commit (has previously held a leaked API key)
+information.md
