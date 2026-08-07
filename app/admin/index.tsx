@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
-  StyleSheet, Alert, ActivityIndicator, Modal,
+  StyleSheet, ActivityIndicator, Modal,
   RefreshControl, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -132,6 +132,7 @@ registerTranslations({
 
 type Tab = 'businesses' | 'users' | 'reports' | 'events' | 'attractions';
 type ContentKind = 'events' | 'attractions';
+type AdminAlertButton = { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void };
 
 const CONTENT_COLLECTION: Record<ContentKind, string> = {
   events: 'events',
@@ -243,6 +244,16 @@ export default function AdminScreen() {
   // Priority modal
   const [priorityModal, setPriorityModal] = useState<{ visible: boolean; item: any | null; value: string; collection: string }>({ visible: false, item: null, value: '', collection: 'businesses' });
 
+  // Alert modal — Alert.alert() has no implementation on react-native-web (this admin
+  // panel runs in a browser), so confirms silently hang there. This is a web-safe stand-in.
+  const [adminAlert, setAdminAlert] = useState<{ visible: boolean; title: string; message: string; buttons: AdminAlertButton[] }>({
+    visible: false, title: '', message: '', buttons: [],
+  });
+  const showAlert = (title: string, message?: string, buttons?: AdminAlertButton[]) => {
+    setAdminAlert({ visible: true, title, message: message || '', buttons: buttons?.length ? buttons : [{ text: 'OK' }] });
+  };
+  const closeAdminAlert = () => setAdminAlert(prev => ({ ...prev, visible: false }));
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace('/auth'); return; }
@@ -320,7 +331,7 @@ export default function AdminScreen() {
   const saveContent = async () => {
     const { kind, editId, name, category, location, phone, image, date, description, mapLink, facebook, website, photos, schedule, latitude, longitude } = contentForm;
     if (!name.trim() || !category.trim() || !location.trim()) {
-      Alert.alert(t('Erreur'), t('Le nom, la catégorie et le lieu sont requis.'));
+      showAlert(t('Erreur'), t('Le nom, la catégorie et le lieu sont requis.'));
       return;
     }
     const collectionName = CONTENT_COLLECTION[kind];
@@ -349,7 +360,7 @@ export default function AdminScreen() {
       }
       closeContentForm();
     } catch (e: any) {
-      Alert.alert(t('Erreur'), e?.message || t("Impossible d'enregistrer."));
+      showAlert(t('Erreur'), e?.message || t("Impossible d'enregistrer."));
     } finally {
       setSavingContent(false);
     }
@@ -357,7 +368,7 @@ export default function AdminScreen() {
 
   const deleteContent = (kind: ContentKind, item: any) => {
     const collectionName = CONTENT_COLLECTION[kind];
-    Alert.alert(t('Supprimer?'), `"${item.name}"${t(' sera supprimé définitivement.')}`, [
+    showAlert(t('Supprimer?'), `"${item.name}"${t(' sera supprimé définitivement.')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Supprimer'), style: 'destructive', onPress: async () => {
@@ -365,7 +376,7 @@ export default function AdminScreen() {
           try {
             await deleteDoc(doc(db, collectionName, item.id));
           } catch {
-            Alert.alert(t('Erreur'), t('Impossible de supprimer.'));
+            showAlert(t('Erreur'), t('Impossible de supprimer.'));
           } finally { setActionId(null); }
         },
       },
@@ -381,7 +392,7 @@ export default function AdminScreen() {
     const dupeNote = dupes.length > 0
       ? `\n\n${t('Doublon avec :')} ${dupes.map(b => `"${b.name}"${b._exact ? t(' (identique)') : b._score >= DUPE_THRESHOLD ? t(' (très similaire)') : t(' (faute probable)')}`).join(', ')}`
       : '';
-    Alert.alert(
+    showAlert(
       dupes.length > 0 ? t('Doublon détecté') : t('Approuver cette entreprise?'),
       `"${item.name}"${t(" apparaîtra dans l'annuaire.")}${dupeNote}`,
       [
@@ -392,7 +403,7 @@ export default function AdminScreen() {
             try {
               await updateDoc(doc(db, 'businesses', item.id), { status: 'approved' });
             } catch (e: any) {
-              Alert.alert(t('Erreur'), e?.message || t("Impossible d'approuver."));
+              showAlert(t('Erreur'), e?.message || t("Impossible d'approuver."));
             } finally { setActionId(null); }
           },
         },
@@ -401,7 +412,7 @@ export default function AdminScreen() {
   };
 
   const rejectBusiness = (item: any) => {
-    Alert.alert(t('Rejeter cette entreprise?'), `"${item.name}"${t(' sera supprimée définitivement.')}`, [
+    showAlert(t('Rejeter cette entreprise?'), `"${item.name}"${t(' sera supprimée définitivement.')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Rejeter'), style: 'destructive', onPress: async () => {
@@ -409,7 +420,7 @@ export default function AdminScreen() {
           try {
             await deleteDoc(doc(db, 'businesses', item.id));
           } catch (e: any) {
-            Alert.alert(t('Erreur'), e?.message || t('Impossible de rejeter.'));
+            showAlert(t('Erreur'), e?.message || t('Impossible de rejeter.'));
           } finally { setActionId(null); }
         },
       },
@@ -417,7 +428,7 @@ export default function AdminScreen() {
   };
 
   const revokeBusiness = (item: any) => {
-    Alert.alert(t('Retirer de l\'annuaire?'), `"${item.name}"${t(' ne sera plus visible.')}`, [
+    showAlert(t('Retirer de l\'annuaire?'), `"${item.name}"${t(' ne sera plus visible.')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Retirer'), style: 'destructive', onPress: async () => {
@@ -425,7 +436,7 @@ export default function AdminScreen() {
           try {
             await updateDoc(doc(db, 'businesses', item.id), { status: 'pending' });
           } catch (e: any) {
-            Alert.alert(t('Erreur'), e?.message || t('Impossible.'));
+            showAlert(t('Erreur'), e?.message || t('Impossible.'));
           } finally { setActionId(null); }
         },
       },
@@ -434,7 +445,7 @@ export default function AdminScreen() {
 
   // ── User actions ────────────────────────────────────────────────────────
   const approveUser = (item: any) => {
-    Alert.alert(t('Approuver ce vendeur?'), `${item.name}${t(' pourra soumettre des entreprises.')}`, [
+    showAlert(t('Approuver ce vendeur?'), `${item.name}${t(' pourra soumettre des entreprises.')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Approuver'), onPress: async () => {
@@ -442,7 +453,7 @@ export default function AdminScreen() {
           try {
             await updateDoc(doc(db, 'users', item.id), { role: 'vendor' });
           } catch (e: any) {
-            Alert.alert(t('Erreur'), e?.message || t("Impossible d'approuver."));
+            showAlert(t('Erreur'), e?.message || t("Impossible d'approuver."));
           } finally { setActionId(null); }
         },
       },
@@ -450,7 +461,7 @@ export default function AdminScreen() {
   };
 
   const rejectUser = (item: any) => {
-    Alert.alert(t('Rejeter ce vendeur?'), `${t('Le compte de')} ${item.name}${t(' sera supprimé.')}`, [
+    showAlert(t('Rejeter ce vendeur?'), `${t('Le compte de')} ${item.name}${t(' sera supprimé.')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Rejeter'), style: 'destructive', onPress: async () => {
@@ -458,7 +469,7 @@ export default function AdminScreen() {
           try {
             await deleteDoc(doc(db, 'users', item.id));
           } catch (e: any) {
-            Alert.alert(t('Erreur'), e?.message || t('Impossible de rejeter.'));
+            showAlert(t('Erreur'), e?.message || t('Impossible de rejeter.'));
           } finally { setActionId(null); }
         },
       },
@@ -466,7 +477,7 @@ export default function AdminScreen() {
   };
 
   const revokeUser = (item: any) => {
-    Alert.alert(t('Révoquer ce vendeur?'), `${item.name}${t(' repassera en "En attente".')}`, [
+    showAlert(t('Révoquer ce vendeur?'), `${item.name}${t(' repassera en "En attente".')}`, [
       { text: t('Annuler'), style: 'cancel' },
       {
         text: t('Révoquer'), style: 'destructive', onPress: async () => {
@@ -474,7 +485,7 @@ export default function AdminScreen() {
           try {
             await updateDoc(doc(db, 'users', item.id), { role: 'pending' });
           } catch (e: any) {
-            Alert.alert(t('Erreur'), e?.message || t('Impossible.'));
+            showAlert(t('Erreur'), e?.message || t('Impossible.'));
           } finally { setActionId(null); }
         },
       },
@@ -590,9 +601,9 @@ export default function AdminScreen() {
           onPress={async () => {
             try {
               await updateDoc(doc(db, 'businesses', item.id), { verified: !item.verified });
-              Alert.alert(t('Succès'), item.verified ? t('Badge vérifié retiré') : t('Entreprise vérifiée'));
+              showAlert(t('Succès'), item.verified ? t('Badge vérifié retiré') : t('Entreprise vérifiée'));
             } catch {
-              Alert.alert(t('Erreur'), t('Impossible de modifier'));
+              showAlert(t('Erreur'), t('Impossible de modifier'));
             }
           }}
         >
@@ -603,9 +614,9 @@ export default function AdminScreen() {
           onPress={async () => {
             try {
               await updateDoc(doc(db, 'businesses', item.id), { pinned: !item.pinned });
-              Alert.alert(t('Succès'), item.pinned ? t('Épinglage retiré') : t('Entreprise épinglée'));
+              showAlert(t('Succès'), item.pinned ? t('Épinglage retiré') : t('Entreprise épinglée'));
             } catch {
-              Alert.alert(t('Erreur'), t('Impossible de modifier'));
+              showAlert(t('Erreur'), t('Impossible de modifier'));
             }
           }}
         >
@@ -1030,7 +1041,7 @@ export default function AdminScreen() {
               </View>
               <View style={styles.actionRow}>
                 <TouchableOpacity style={styles.rejectBtn}
-                  onPress={() => Alert.alert(t('Ignorer?'), '', [
+                  onPress={() => showAlert(t('Ignorer?'), '', [
                     { text: t('Annuler'), style: 'cancel' },
                     { text: t('Ignorer'), onPress: async () => { try { await deleteDoc(doc(db, 'reports', item.id)); } catch {} } },
                   ])}>
@@ -1038,7 +1049,7 @@ export default function AdminScreen() {
                   <Text style={styles.rejectText}>{t('Ignorer')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.approveBtn, { backgroundColor: '#D32F2F' }]}
-                  onPress={() => Alert.alert(t("Retirer l'annonce?"), `"${item.businessName}"${t(' sera remise en attente.')}`, [
+                  onPress={() => showAlert(t("Retirer l'annonce?"), `"${item.businessName}"${t(' sera remise en attente.')}`, [
                     { text: t('Annuler'), style: 'cancel' },
                     { text: t('Retirer'), style: 'destructive', onPress: async () => {
                       try {
@@ -1110,6 +1121,43 @@ export default function AdminScreen() {
         </>
       )}
 
+      {/* ALERT MODAL — web-safe replacement for Alert.alert(), used everywhere in this file */}
+      <Modal
+        visible={adminAlert.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAdminAlert}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.text, marginBottom: adminAlert.message ? 0 : 20 }]}>{adminAlert.title}</Text>
+            {!!adminAlert.message && (
+              <Text style={[styles.modalSub, { color: theme.textSecondary }]}>{adminAlert.message}</Text>
+            )}
+            <View style={styles.modalBtns}>
+              {adminAlert.buttons.map((btn, i) => {
+                const isCancel = btn.style === 'cancel';
+                const isDestructive = btn.style === 'destructive';
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[
+                      styles.modalBtn,
+                      isCancel
+                        ? { borderColor: theme.border }
+                        : { backgroundColor: isDestructive ? '#D32F2F' : Colors.primary, borderColor: isDestructive ? '#D32F2F' : Colors.primary },
+                    ]}
+                    onPress={() => { closeAdminAlert(); btn.onPress?.(); }}
+                  >
+                    <Text style={[styles.modalBtnText, { color: isCancel ? theme.textSecondary : '#fff' }]}>{btn.text}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* PRIORITY MODAL */}
       <Modal
         visible={priorityModal.visible}
@@ -1146,15 +1194,15 @@ export default function AdminScreen() {
                 onPress={async () => {
                   const num = parseInt(priorityModal.value || '0');
                   if (isNaN(num) || num < 0 || num > 100) {
-                    Alert.alert(t('Erreur'), t('Entrez un nombre entre 0 et 100'));
+                    showAlert(t('Erreur'), t('Entrez un nombre entre 0 et 100'));
                     return;
                   }
                   try {
                     await updateDoc(doc(db, priorityModal.collection, priorityModal.item.id), { priority: num });
                     setPriorityModal({ visible: false, item: null, value: '', collection: priorityModal.collection });
-                    Alert.alert(t('Succès'), `${t('Priorité mise à')} ${num}`);
+                    showAlert(t('Succès'), `${t('Priorité mise à')} ${num}`);
                   } catch {
-                    Alert.alert(t('Erreur'), t('Impossible de modifier'));
+                    showAlert(t('Erreur'), t('Impossible de modifier'));
                   }
                 }}
               >
