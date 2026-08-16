@@ -17,7 +17,9 @@ import { containsProfanity } from '../../lib/profanityFilter';
 import { useAuth } from '../../lib/AuthContext';
 import { Colors, CATEGORIES, CITIES, CITY_CATEGORIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
-import { Category, City, BusinessLocation } from '../../types';
+import { Category, City, BusinessLocation, OpeningHours } from '../../types';
+import { emptyOpeningHours, hasAnyOpeningHours } from '../../lib/openingHours';
+import { OpeningHoursEditor } from '../../components/OpeningHoursEditor';
 import LocationPicker from '../../components/Locationpicker';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
 import { AppHeader } from '../../components/AppHeader';
@@ -81,6 +83,9 @@ registerTranslations({
   '💾  Sauvegarder les modifications': '💾  Save changes',
   'Catégorie': 'Category',
   'Ville': 'City',
+  '🕐 Horaires d\'ouverture': '🕐 Opening hours',
+  "Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.":
+    "Set your opening hours for each day. Customers will see a live « Open »/« Closed » badge.",
 });
 
 // ── Shared components (outside to avoid focus-loss bug) ───────────────────────
@@ -165,6 +170,7 @@ export default function EditBusinessScreen() {
   const [website, setWebsite] = useState('');
   const [priority, setPriority] = useState<number>(0);
   const [location, setLocation] = useState<BusinessLocation | undefined>(undefined);
+  const [openingHours, setOpeningHours] = useState<OpeningHours>(emptyOpeningHours());
 
   // Existing remote photo URLs
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
@@ -205,6 +211,7 @@ export default function EditBusinessScreen() {
       setInstagram(d.instagram || '');
       setWebsite(d.website || '');
       setPriority(d.priority || 0);
+      setOpeningHours(d.openingHours || emptyOpeningHours());
       setExistingPhotos(d.photos || (d.coverPhoto ? [d.coverPhoto] : []));
       if (d.location) setLocation(d.location);
     }).finally(() => setFetchLoading(false));
@@ -323,6 +330,7 @@ export default function EditBusinessScreen() {
         facebook: facebook.trim() || null,
         instagram: instagram.trim() || null,
         website: website.trim() || null,
+        openingHours: hasAnyOpeningHours(openingHours) ? openingHours : null,
         photos: allPhotos,
         coverPhoto: allPhotos[0] || '',
         location: location && (location.address || location.latitude) ? {
@@ -445,6 +453,14 @@ export default function EditBusinessScreen() {
             placeholder="+22670000000" keyboardType="phone-pad" error={errors.phone} {...fp} />
           <Field label={t('WhatsApp')} value={whatsapp} onChangeText={setWhatsapp}
             placeholder={t('+22670000000 (si différent)')} keyboardType="phone-pad" optional {...fp} />
+        </View>
+
+        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.formSection, { color: Colors.primary }]}>{t("🕐 Horaires d'ouverture")}</Text>
+          <Text style={[styles.hint, { color: theme.textSecondary, marginTop: -8 }]}>
+            {t("Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.")}
+          </Text>
+          <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} theme={theme} />
         </View>
 
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>

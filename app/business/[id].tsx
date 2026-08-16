@@ -25,6 +25,8 @@ import { useColorTheme } from '../../hooks/useColorTheme';
 import { CategoryIcon } from '../../components/CategoryIcon';
 import { ContentContainer } from '../../components/ContentContainer';
 import { AppHeader } from '../../components/AppHeader';
+import { OpenStatusBadge } from '../../components/OpenStatusBadge';
+import { DAYS_MONDAY_FIRST, DAY_LABELS_FR, DAY_KEYS_BY_UTC_INDEX, formatDayHours } from '../../lib/openingHours';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
 
 registerTranslations({
@@ -76,6 +78,14 @@ registerTranslations({
   'Voir dans Maps': 'View on Maps',
   'Partager': 'Share',
   'Signaler': 'Report',
+  'Horaires': 'Hours',
+  'Lundi': 'Monday',
+  'Mardi': 'Tuesday',
+  'Mercredi': 'Wednesday',
+  'Jeudi': 'Thursday',
+  'Vendredi': 'Friday',
+  'Samedi': 'Saturday',
+  'Dimanche': 'Sunday',
   'Téléphone': 'Phone',
   'Ville': 'City',
   'Avis': 'Reviews',
@@ -603,6 +613,11 @@ export default function BusinessDetailScreen() {
                   <Text style={[styles.city, { color: theme.textSecondary }]}>{business.city}</Text>
                 </View>
               </View>
+              {business.openingHours && (
+                <View style={{ marginTop: 6 }}>
+                  <OpenStatusBadge openingHours={business.openingHours} />
+                </View>
+              )}
               {/* RATING SUMMARY */}
               {reviews.length > 0 && (
                 <View style={styles.ratingRow}>
@@ -672,6 +687,29 @@ export default function BusinessDetailScreen() {
               )}
             </View>
           </View>
+
+          {/* HORAIRES */}
+          {business.openingHours && (
+            <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <SectionHeader icon="time-outline" color="#EF6C00" title={t('Horaires')} theme={theme} />
+                <OpenStatusBadge openingHours={business.openingHours} size="sm" />
+              </View>
+              {DAYS_MONDAY_FIRST.map(day => {
+                const isToday = day === DAY_KEYS_BY_UTC_INDEX[new Date().getUTCDay()];
+                return (
+                  <View key={day} style={styles.hoursRow}>
+                    <Text style={[styles.hoursDay, { color: isToday ? Colors.primary : theme.text }, isToday && { fontWeight: '600' }]}>
+                      {t(DAY_LABELS_FR[day])}
+                    </Text>
+                    <Text style={[styles.hoursValue, { color: isToday ? Colors.primary : theme.textSecondary }, isToday && { fontWeight: '600' }]}>
+                      {t(formatDayHours(business.openingHours![day]))}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* SOCIAL */}
           {(business.facebook || business.instagram || business.website) && (
@@ -1028,6 +1066,9 @@ const styles = StyleSheet.create({
   socialBtnText: { color: '#fff', fontSize: 14, fontWeight: '400' },
   mapsBtnAddress: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
   mapsBtnCoords: { fontSize: 11, marginTop: 2 },
+  hoursRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  hoursDay: { fontSize: 13 },
+  hoursValue: { fontSize: 13 },
   mapsNavBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: Colors.headerGradient[0], borderRadius: 7, paddingHorizontal: 12, paddingVertical: 8,

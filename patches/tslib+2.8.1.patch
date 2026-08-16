@@ -1,0 +1,12 @@
+diff --git a/node_modules/tslib/package.json b/node_modules/tslib/package.json
+index 57d0578..c14a3aa 100644
+--- a/node_modules/tslib/package.json
++++ b/node_modules/tslib/package.json
+@@ -33,7 +33,6 @@
+                 "default": "./tslib.es6.mjs"
+             },
+             "import": {
+-                "node": "./modules/index.js",
+                 "default": {
+                     "types": "./modules/index.d.ts",
+                     "default": "./tslib.es6.mjs"

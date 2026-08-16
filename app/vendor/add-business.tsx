@@ -18,7 +18,9 @@ import { containsProfanity } from '../../lib/profanityFilter';
 import { useAuth } from '../../lib/AuthContext';
 import { Colors, CATEGORIES, CITIES, CITY_CATEGORIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
-import { Category, City, BusinessLocation } from '../../types';
+import { Category, City, BusinessLocation, OpeningHours } from '../../types';
+import { emptyOpeningHours, hasAnyOpeningHours } from '../../lib/openingHours';
+import { OpeningHoursEditor } from '../../components/OpeningHoursEditor';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
 import { AppHeader } from '../../components/AppHeader';
 
@@ -79,6 +81,9 @@ registerTranslations({
   'Suivant →': 'Next →',
   'Soumettre': 'Submit',
   'Ville': 'City',
+  'Horaires': 'Hours',
+  "Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.":
+    "Set your opening hours for each day. Customers will see a live « Open »/« Closed » badge.",
 });
 
 // ── Duplicate detection ────────────────────────────────────────────────────────
@@ -181,7 +186,7 @@ function PickerModal({ visible, title, items, selected, onSelect, onClose, cardC
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_PHOTOS = 5;
-const STEPS = ['Informations', 'Contact', 'Réseaux', 'Localisation', 'Photos'];
+const STEPS = ['Informations', 'Contact', 'Horaires', 'Réseaux', 'Localisation', 'Photos'];
 
 export default function AddBusinessScreen() {
   const router = useRouter();
@@ -201,6 +206,7 @@ export default function AddBusinessScreen() {
   const [facebook, setFacebook] = useState('');
   const [instagram, setInstagram] = useState('');
   const [website, setWebsite] = useState('');
+  const [openingHours, setOpeningHours] = useState<OpeningHours>(emptyOpeningHours());
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [location, setLocation] = useState<BusinessLocation | undefined>(undefined);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -378,6 +384,7 @@ export default function AddBusinessScreen() {
         facebook: facebook.trim() || null,
         instagram: instagram.trim() || null,
         website: website.trim() || null,
+        openingHours: hasAnyOpeningHours(openingHours) ? openingHours : null,
         photos: uploadedUrls,
         coverPhoto: uploadedUrls[0] || '',
         ownerId: user.uid,
@@ -518,8 +525,18 @@ export default function AddBusinessScreen() {
           </View>
         )}
 
-        {/* STEP 2: Réseaux sociaux */}
+        {/* STEP 2: Horaires */}
         {step === 2 && (
+          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.hint, { color: theme.textSecondary }]}>
+              {t("Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.")}
+            </Text>
+            <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} theme={theme} />
+          </View>
+        )}
+
+        {/* STEP 3: Réseaux sociaux */}
+        {step === 3 && (
           <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Field label={t('Facebook')} value={facebook} onChangeText={setFacebook}
               placeholder={t('Lien ou nom de la page')} optional {...fp} />
@@ -530,8 +547,8 @@ export default function AddBusinessScreen() {
           </View>
         )}
 
-        {/* STEP 3: Localisation */}
-        {step === 3 && (
+        {/* STEP 4: Localisation */}
+        {step === 4 && (
           <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.hint, { color: theme.textSecondary }]}>
               {t('Optionnel. Aidez vos clients à vous trouver.')}
@@ -557,8 +574,8 @@ export default function AddBusinessScreen() {
           </View>
         )}
 
-        {/* STEP 4: Photos */}
-        {step === 4 && (
+        {/* STEP 5: Photos */}
+        {step === 5 && (
           <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.hint, { color: theme.textSecondary }]}>
               {t(`Jusqu'à ${MAX_PHOTOS} photos. La première = couverture.`)}

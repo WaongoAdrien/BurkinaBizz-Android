@@ -6,6 +6,16 @@ export interface BusinessLocation {
   longitude?: number;
 }
 
+export type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface DayHours {
+  open?: string;    // "HH:MM", 24h
+  close?: string;   // "HH:MM", 24h
+  closed: boolean;
+}
+
+export type OpeningHours = Record<DayKey, DayHours>;
+
 export interface Business {
   id: string;
   name: string;
@@ -30,6 +40,7 @@ export interface Business {
   priority?: number;       // NEW: manual ordering (0-100, higher = appears first)
     verified?: boolean;  // NEW: admin verified status
   relatedBusinessId?: string; // NEW: admin-linked "see also" business
+  openingHours?: OpeningHours; // NEW: per-day open/close times, computed in Africa/Ouagadougou time (UTC+0)
 }
 
 export interface User {

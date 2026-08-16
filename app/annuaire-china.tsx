@@ -15,6 +15,7 @@ import { Business, Category } from '../types';
 import { Colors, CATEGORIES, CITY_CATEGORIES } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { CategoryIcon } from '../components/CategoryIcon';
+import { OpenStatusBadge } from '../components/OpenStatusBadge';
 import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 
 registerTranslations({
@@ -139,6 +140,11 @@ export default function AnnuaireChinaScreen() {
                 </Text>
               </View>
             </View>
+            {item.openingHours && (
+              <View style={{ marginTop: 4 }}>
+                <OpenStatusBadge openingHours={item.openingHours} size="sm" />
+              </View>
+            )}
             <Text style={[styles.cardDesc, { color: theme.textSecondary }]} numberOfLines={2}>
               {item.description}
             </Text>

@@ -19,6 +19,7 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { CategoryIcon } from '../components/CategoryIcon';
 import { ContentContainer } from '../components/ContentContainer';
 import { AppHeader } from '../components/AppHeader';
+import { OpenStatusBadge } from '../components/OpenStatusBadge';
 import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 
 registerTranslations({
@@ -283,6 +284,11 @@ export default function AnnuaireScreen() {
                 </Text>
               </View>
             </View>
+            {item.openingHours && (
+              <View style={{ marginTop: 4 }}>
+                <OpenStatusBadge openingHours={item.openingHours} size="sm" />
+              </View>
+            )}
             <Text style={[styles.cardDesc, { color: theme.textSecondary }]} numberOfLines={2}>
               {item.description}
             </Text>
