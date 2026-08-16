@@ -15,6 +15,8 @@ import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 registerTranslations({
   'Par Catégorie': 'By Category',
   'Parcourir les entreprises': 'Browse all businesses',
+  'Produits à vendre': 'Products for sale',
+  'Achetez et vendez des articles entre particuliers': 'Buy and sell items with other users',
   'Applications utiles au Burkina Faso': 'Useful applications in Burkina Faso',
   "Découvrez les meilleures applications": 'Discover the best Burkinabè mobile apps',
   'Vous avez une entreprise?': 'Do you have a business?',
@@ -111,6 +113,22 @@ export default function MoreScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.categoriesLinkTitle, { color: theme.text }]}>{t('Par Catégorie')}</Text>
               <Text style={[styles.categoriesLinkSub, { color: theme.textSecondary }]}>{t('Parcourir toutes les catégories')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          {/* MARKETPLACE LINK */}
+          <TouchableOpacity
+            style={[styles.categoriesLink, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={() => router.push('/product-categories')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.categoriesLinkIcon}>
+              <Ionicons name="pricetags" size={22} color={Colors.cta} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.categoriesLinkTitle, { color: theme.text }]}>{t('Produits à vendre')}</Text>
+              <Text style={[styles.categoriesLinkSub, { color: theme.textSecondary }]}>{t('Achetez et vendez des articles entre particuliers')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>

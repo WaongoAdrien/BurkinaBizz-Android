@@ -20,6 +20,7 @@ registerTranslations({
   'Se connecter': 'Sign in',
   'Erreur': 'Error',
   'Impossible de modifier vos favoris.': 'Unable to update your favorites.',
+  'Négociable': 'Negotiable',
 });
 
 interface ProductCardProps {
@@ -40,6 +41,8 @@ export default function ProductCard({ product }: ProductCardProps) {
     return subscribeLikes(user.uid, (ids) => setLiked(ids.has(product.id)));
   }, [user, product.id]);
 
+  const coverPhoto = product.photos?.[0] || product.imageUrl;
+
   const handleLike = async () => {
     if (!user) {
       Alert.alert(t('Connexion requise'), t('Connectez-vous pour sauvegarder des favoris.'), [
@@ -56,7 +59,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         await likeProduct(user.uid, {
           id: product.id,
           name: product.name,
-          imageUrl: product.imageUrl,
+          imageUrl: coverPhoto || '',
           price: product.price,
           city: product.city,
           category: product.category,
@@ -76,7 +79,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       activeOpacity={0.85}
     >
       <Image
-        source={product.imageUrl ? { uri: product.imageUrl } : require('../assets/images/placeholder.png')}
+        source={coverPhoto ? { uri: coverPhoto } : require('../assets/images/placeholder.png')}
         style={styles.image}
         resizeMode="cover"
         fadeDuration={200}
@@ -86,6 +89,12 @@ export default function ProductCard({ product }: ProductCardProps) {
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{product.category}</Text>
       </View>
+
+      {product.negotiable && (
+        <View style={styles.negotiableBadge}>
+          <Text style={styles.negotiableBadgeText}>{t('Négociable')}</Text>
+        </View>
+      )}
 
       {/* Like button */}
       <TouchableOpacity
@@ -126,6 +135,12 @@ const styles = StyleSheet.create({
     borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3,
   },
   badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '400' },
+  negotiableBadge: {
+    position: 'absolute', top: 32, left: 8,
+    backgroundColor: '#2E7D32DD',
+    borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  negotiableBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '400' },
   likeBtn: {
     position: 'absolute', top: 8, right: 8,
     backgroundColor: 'rgba(255,255,255,0.9)',

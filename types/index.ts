@@ -52,14 +52,39 @@ export interface User {
   createdAt?: string;
 }
 
+export type ProductCategory =
+  | 'Électronique'
+  | 'Téléphones & Tablettes'
+  | 'Vêtements & Mode'
+  | 'Meubles & Maison'
+  | 'Véhicules'
+  | 'Beauté & Santé'
+  | 'Sports & Loisirs'
+  | 'Livres & Éducation'
+  | 'Bébé & Enfants'
+  | 'Autres';
+
+export interface ProductCategoryItem {
+  label: ProductCategory;
+  icon: string;
+  iconFamily: 'Ionicons' | 'MaterialCommunityIcons' | 'MaterialIcons';
+  color: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   description: string;
-  category: Category;
+  category: ProductCategory;
   city: City;
-  imageUrl?: string;
+  imageUrl?: string;       // legacy single-photo field
+  photos?: string[];       // NEW: multiple photos, photos[0] is the cover
   price: number;
+  negotiable?: boolean;    // NEW: price is open to negotiation
+  whatsapp?: string;       // NEW: seller WhatsApp number
+  phone?: string;          // NEW: seller phone number
+  ownerId?: string;        // NEW: uid of the seller
+  status?: 'pending' | 'approved'; // NEW: moderation status, mirrors businesses
   createdAt?: string | Date;
 }
 
