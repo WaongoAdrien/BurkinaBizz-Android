@@ -72,6 +72,7 @@ registerTranslations({
   "Impossible d'ouvrir le site web.": 'Unable to open the website.',
   'Site web': 'Website',
   'Localisation': 'Location',
+  'Voir aussi': 'See also',
   'Voir dans Maps': 'View on Maps',
   'Partager': 'Share',
   'Signaler': 'Report',
@@ -186,12 +187,14 @@ export default function BusinessDetailScreen() {
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
+  const [relatedBusiness, setRelatedBusiness] = useState<Business | null>(null);
   const [activePhoto, setActivePhoto] = useState(0);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [viewerPhotoIndex, setViewerPhotoIndex] = useState(0);
   const [likeLoading, setLikeLoading] = useState(false);
   const [nameWidth, setNameWidth] = useState(0);
   const imageViewerRef = useRef<FlatList>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Reviews
   const [reviews, setReviews] = useState<any[]>([]);
@@ -208,11 +211,20 @@ export default function BusinessDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     getDoc(doc(db, 'businesses', id)).then(snap => {
       if (snap.exists()) setBusiness({ id: snap.id, ...snap.data() } as Business);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [id]);
+
+  // Related ("see also") business
+  useEffect(() => {
+    if (!business?.relatedBusinessId) { setRelatedBusiness(null); return; }
+    getDoc(doc(db, 'businesses', business.relatedBusinessId)).then(snap => {
+      setRelatedBusiness(snap.exists() ? ({ id: snap.id, ...snap.data() } as Business) : null);
+    }).catch(() => setRelatedBusiness(null));
+  }, [business?.relatedBusinessId]);
 
   // Real-time reviews
   useEffect(() => {
@@ -449,7 +461,7 @@ export default function BusinessDetailScreen() {
         colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
         style={{ flex: 1 }}
       >
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} style={styles.container} showsVerticalScrollIndicator={false}>
 
         {/* PINNED BANNER */}
         {business.pinned && (
@@ -619,6 +631,28 @@ export default function BusinessDetailScreen() {
             <SectionHeader icon="document-text-outline" color={Colors.primary} title={t('À propos')} theme={theme} />
             <Text style={[styles.description, { color: theme.textSecondary }]}>{business.description}</Text>
           </View>
+
+          {/* VOIR AUSSI (related business) */}
+          {relatedBusiness && (
+            <TouchableOpacity
+              style={[styles.infoCard, styles.relatedCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => router.push(`/business/${relatedBusiness.id}`)}
+              activeOpacity={0.8}
+            >
+              {relatedBusiness.coverPhoto ? (
+                <Image source={{ uri: relatedBusiness.coverPhoto }} style={styles.relatedCardImage} />
+              ) : (
+                <View style={[styles.relatedCardImage, styles.relatedCardImageFallback, { backgroundColor: Colors.primary + '22' }]}>
+                  <Ionicons name="storefront" size={22} color={Colors.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.relatedCardLabel, { color: theme.textSecondary }]}>{t('Voir aussi')}</Text>
+                <Text style={[styles.relatedCardName, { color: theme.text }]} numberOfLines={1}>{relatedBusiness.name}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
 
           {/* CONTACT BUTTONS */}
           <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
@@ -1010,6 +1044,14 @@ const styles = StyleSheet.create({
   },
   actionBtnText: { fontSize: 14, fontWeight: '400', color: '#fff' },
   infoCard: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 14 },
+  relatedCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12,
+  },
+  relatedCardImage: { width: 48, height: 48, borderRadius: 8 },
+  relatedCardImageFallback: { alignItems: 'center', justifyContent: 'center' },
+  relatedCardLabel: { fontSize: 11, marginBottom: 2 },
+  relatedCardName: { fontSize: 15, fontWeight: '600' },
   reviewsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addReviewBtn: { backgroundColor: Colors.headerGradient[0], paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
   addReviewBtnText: { color: '#fff', fontSize: 13, fontWeight: '400' },

@@ -1,9 +1,9 @@
 // app/evenement/[id].tsx — Event Detail Screen
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, Share,
-  StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions,
+  StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions, StatusBar, Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -77,6 +77,9 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<EventItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePhoto, setActivePhoto] = useState(0);
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [viewerPhotoIndex, setViewerPhotoIndex] = useState(0);
+  const imageViewerRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -178,8 +181,17 @@ export default function EventDetailScreen() {
                       setActivePhoto(Math.round(offsetX / containerWidth));
                     }}
                     scrollEventThrottle={16}
-                    renderItem={({ item }) => (
-                      <Image source={{ uri: item }} style={[styles.photo, { width: Math.min(width, 600) }]} resizeMode="cover" />
+                    renderItem={({ item, index }) => (
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => {
+                          setViewerPhotoIndex(index);
+                          setShowImageViewer(true);
+                        }}
+                        style={{ width: Math.min(width, 600) }}
+                      >
+                        <Image source={{ uri: item }} style={[styles.photo, { width: Math.min(width, 600) }]} resizeMode="cover" />
+                      </TouchableOpacity>
                     )}
                   />
                   {photos.length > 1 && (
@@ -266,6 +278,77 @@ export default function EventDetailScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </LinearGradient>
+
+      {/* FULL-SCREEN IMAGE VIEWER */}
+      <Modal
+        visible={showImageViewer}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageViewer(false)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setShowImageViewer(false)}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          {photos.length > 1 && (
+            <View style={styles.imageViewerCounter}>
+              <Text style={styles.imageViewerCounterText}>
+                {viewerPhotoIndex + 1} / {photos.length}
+              </Text>
+            </View>
+          )}
+
+          <FlatList
+            ref={imageViewerRef}
+            data={photos}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => `viewer-${i}`}
+            initialScrollIndex={viewerPhotoIndex}
+            getItemLayout={(_, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                imageViewerRef.current?.scrollToIndex({ index: info.index, animated: false });
+              }, 50);
+            }}
+            onMomentumScrollEnd={e => setViewerPhotoIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+            renderItem={({ item }) => (
+              <View style={styles.imageViewerSlide}>
+                <Image
+                  source={{ uri: item }}
+                  style={styles.imageViewerPhoto}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+          />
+
+          {photos.length > 1 && (
+            <View style={styles.imageViewerDots}>
+              {photos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.imageViewerDot,
+                    { backgroundColor: i === viewerPhotoIndex ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
@@ -298,4 +381,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(11,30,61,0.6)', alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
   },
+  imageViewerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+  imageViewerClose: { position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  imageViewerCounter: { position: 'absolute', top: 50, left: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7 },
+  imageViewerCounterText: { fontSize: 14, color: '#fff', fontWeight: '400' },
+  imageViewerSlide: { width, height: '100%', justifyContent: 'center', alignItems: 'center' },
+  imageViewerPhoto: { width: '100%', height: '100%' },
+  imageViewerDots: { position: 'absolute', bottom: 40, alignSelf: 'center', flexDirection: 'row', gap: 6 },
+  imageViewerDot: { width: 8, height: 8, borderRadius: 4 },
 });

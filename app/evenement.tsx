@@ -21,6 +21,7 @@ registerTranslations({
   'Rechercher un événement...': 'Search an event...',
   '🌍 Tous': '🌍 All',
   'Aucun événement ne correspond à votre recherche': 'No event matches your search',
+  'Découvrez les événements à ne pas manquer près de chez vous': "Discover the events you shouldn't miss near you",
 });
 
 const HERO_IMAGE = require('../assets/imageindex.png');
@@ -157,9 +158,13 @@ export default function EventsScreen() {
         <View style={styles.hero}>
           <Image source={HERO_IMAGE} style={styles.heroImage} resizeMode="cover" />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.65)']}
+            colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.5, 1]}
             style={styles.heroOverlay}
-          />
+          >
+            <Text style={styles.heroTitle}>{t('Événements')}</Text>
+            <Text style={styles.heroSubtitle}>{t('Découvrez les événements à ne pas manquer près de chez vous')}</Text>
+          </LinearGradient>
         </View>
 
         {/* BODY */}
@@ -254,18 +259,28 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 140,
+    height: 190,
     justifyContent: 'flex-end',
     paddingHorizontal: 20,
     paddingBottom: 22,
   },
   heroTitle: {
-    fontSize: 22,
-    fontWeight: '300',
+    fontSize: 26,
+    fontWeight: '700',
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.75)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+  heroSubtitle: {
+    fontSize: 13.5,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 6,
+    lineHeight: 18,
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   body: { paddingHorizontal: 10, paddingTop: 20, paddingBottom: 40, gap: 18 },
   searchBox: {

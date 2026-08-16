@@ -14,7 +14,9 @@ import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 
 registerTranslations({
   'Par Catégorie': 'By Category',
-  'Parcourir toutes les catégories': 'Browse all categories',
+  'Parcourir les entreprises': 'Browse all businesses',
+  'Applications utiles au Burkina Faso': 'Useful applications in Burkina Faso',
+  "Découvrez les meilleures applications": 'Discover the best Burkinabè mobile apps',
   'Vous avez une entreprise?': 'Do you have a business?',
   "Référencez-la gratuitement dans l'annuaire": 'List it for free in the directory',
   'Nous contacter sur WhatsApp': 'Contact us on WhatsApp',
@@ -109,6 +111,22 @@ export default function MoreScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.categoriesLinkTitle, { color: theme.text }]}>{t('Par Catégorie')}</Text>
               <Text style={[styles.categoriesLinkSub, { color: theme.textSecondary }]}>{t('Parcourir toutes les catégories')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          {/* USEFUL APPLICATIONS LINK */}
+          <TouchableOpacity
+            style={[styles.categoriesLink, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={() => router.push('/applications')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.categoriesLinkIcon}>
+              <Ionicons name="apps" size={22} color={Colors.cta} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.categoriesLinkTitle, { color: theme.text }]}>{t('Applications utiles au Burkina Faso')}</Text>
+              <Text style={[styles.categoriesLinkSub, { color: theme.textSecondary }]}>{t('Découvrez les meilleures applications mobiles burkinabè')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>

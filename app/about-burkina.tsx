@@ -1,11 +1,13 @@
 // app/about-burkina.tsx — About Burkina Faso
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, Image, ScrollView, TouchableOpacity, StyleSheet, StatusBar, Modal, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Colors } from '../constants';
 import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 import { AppHeader } from '../components/AppHeader';
@@ -58,19 +60,43 @@ registerTranslations({
   'Fiche de voyage officielle': 'Official travel advisory',
   'Site officiel fichedevoyage.gov.bf': 'Official site fichedevoyage.gov.bf',
   'Conseils météo': 'Weather tips',
+  'Fièvre jaune : vérifier les exigences': 'Yellow fever: check requirements',
+  'Site officiel sante.gov.bf': 'Official site sante.gov.bf',
+  'Paludisme : comment se protéger': 'Malaria: how to protect yourself',
+  "Le paludisme est présent toute l'année au Burkina Faso, avec un risque accru pendant la saison des pluies. Dormez sous une moustiquaire imprégnée d'insecticide (MILDA), même pour de courts séjours. Éliminez les eaux stagnantes autour du logement, qui servent de lieux de reproduction aux moustiques. Le soir et la nuit, portez des vêtements longs et couvrants et utilisez un répulsif anti-moustiques sur la peau exposée.":
+    "Malaria is present year-round in Burkina Faso, with increased risk during the rainy season. Sleep under an insecticide-treated bed net (MILDA), even for short stays. Eliminate standing water around your lodging, which serves as a mosquito breeding ground. In the evening and at night, wear long, covering clothing and use mosquito repellent on exposed skin.",
   'Le Burkina Faso connaît deux grandes saisons. La saison sèche (novembre à mai) est marquée par l\'harmattan, un vent chaud et poussiéreux, avec des températures pouvant dépasser 35°C en mars-avril — prévoyez des vêtements légers, un chapeau et une bonne hydratation. La saison des pluies (juin à septembre) apporte des averses parfois intenses en fin de journée, avec une chaleur plus humide; un vêtement de pluie léger est utile. Les soirées peuvent être plus fraîches en décembre-janvier, surtout la nuit.':
     'Burkina Faso has two main seasons. The dry season (November to May) is marked by the harmattan, a hot and dusty wind, with temperatures that can exceed 35°C in March-April — pack light clothing, a hat, and stay well hydrated. The rainy season (June to September) brings sometimes intense downpours in the late afternoon, along with more humid heat; a light rain jacket is useful. Evenings can be cooler in December-January, especially at night.',
   "Envie d'évasion ?": 'Feeling adventurous?',
   'Découvrez les plus beaux sites touristiques du Burkina Faso': "Discover Burkina Faso's most beautiful tourist sites",
+  'Numéros utiles': 'Useful numbers',
+  'Urgences': 'Emergencies',
+  'Police Secours': 'Police',
+  'Sapeurs-Pompiers': 'Fire brigade',
+  'SAMU (urgences médicales)': 'SAMU (medical emergencies)',
+  'Hôpitaux et cliniques': 'Hospitals and clinics',
+  'CHU Yalgado Ouédraogo — Ouagadougou': 'CHU Yalgado Ouédraogo — Ouagadougou',
+  'CHU Sourô Sanou — Bobo-Dioulasso': 'CHU Sourô Sanou — Bobo-Dioulasso',
+  'Polyclinique Notre Dame de la Paix — Ouagadougou': 'Polyclinique Notre Dame de la Paix — Ouagadougou',
+  'Sites officiels': 'Official sites',
+  'Liens officiels': 'Official links',
+  'Aucun site pour le moment.': 'No sites yet.',
+  'Aucun numéro pour le moment.': 'No numbers yet.',
 });
 
 // Hero — was a static country-outline map (assets/maps.png); swapped for a cultural photo.
 // Bwa serpent mask — cliff1066, CC BY 2.0 (Wikimedia Commons)
-const HERO_IMAGE = { uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Bwa-serpent_mask.jpg/1280px-Bwa-serpent_mask.jpg' };
+const HERO_IMAGE = require('../assets/images/siegecbi.webp');
 const TOURISM_CTA_IMAGE = require('../assets/maps.png');
 
 const EVISA_URL = 'https://www.visaburkina.bf/en/home/';
 const FICHE_VOYAGE_URL = 'https://fichedevoyage.gov.bf/';
+// Ministère de la Santé et de l'Hygiène Publique — official source for current entry
+// health requirements. We deliberately don't assert whether yellow fever vaccination is
+// "mandatory" here: we couldn't find an official BF government page stating that outright
+// (only foreign/private travel-clinic sites claim it), so we point to the ministry's own
+// site and let travelers check the current requirement themselves.
+const SANTE_URL = 'https://www.sante.gov.bf';
 
 // Sindou Peaks (Domes de Fabédougou), near Banfora — Wegmann, CC BY-SA 3.0 (Wikimedia Commons)
 const GEOGRAPHY_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Pic_de_sindou.JPG/1280px-Pic_de_sindou.JPG';
@@ -105,11 +131,94 @@ function SectionImage({ uri, caption }: { uri: string; caption: string }) {
   );
 }
 
+function NumberRow({ label, number }: { label: string; number: string }) {
+  return (
+    <TouchableOpacity
+      style={styles.travelLinkCard}
+      onPress={() => Linking.openURL(`tel:${number.replace(/\s+/g, '')}`)}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.travelLinkIcon, { backgroundColor: Colors.primary + '1c' }]}>
+        <Ionicons name="call-outline" size={22} color={Colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.travelLinkTitle}>{label}</Text>
+        <Text style={styles.travelLinkSub}>{number}</Text>
+      </View>
+      <Ionicons name="call-outline" size={18} color={Colors.primary} />
+    </TouchableOpacity>
+  );
+}
+
+function SiteCard({ name, description, website, facebook }: { name: string; description: string; website?: string; facebook?: string }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.siteCard}>
+      <View style={styles.siteCardHeader}>
+        <View style={[styles.travelLinkIcon, { backgroundColor: Colors.primary + '1c' }]}>
+          <Ionicons name="business-outline" size={22} color={Colors.primary} />
+        </View>
+        <Text style={[styles.travelLinkTitle, { flex: 1 }]}>{name}</Text>
+      </View>
+      {!!description && <Text style={styles.siteCardDesc}>{description}</Text>}
+      <View style={styles.siteCardLinks}>
+        {!!website && (
+          <TouchableOpacity
+            style={styles.siteCardLinkBtn}
+            onPress={() => Linking.openURL(website.startsWith('http') ? website : `https://${website}`)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="globe-outline" size={16} color={Colors.primary} />
+            <Text style={styles.siteCardLinkText}>{t('Site web')}</Text>
+          </TouchableOpacity>
+        )}
+        {!!facebook && (
+          <TouchableOpacity
+            style={[styles.siteCardLinkBtn, { backgroundColor: '#1877F2' + '14' }]}
+            onPress={() => Linking.openURL(facebook.startsWith('http') ? facebook : `https://${facebook}`)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="logo-facebook" size={16} color="#1877F2" />
+            <Text style={[styles.siteCardLinkText, { color: '#1877F2' }]}>Facebook</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function AboutBurkinaScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [travelModalVisible, setTravelModalVisible] = useState(false);
+  const [numbersModalVisible, setNumbersModalVisible] = useState(false);
+  const [sitesModalVisible, setSitesModalVisible] = useState(false);
+  const [usefulNumbers, setUsefulNumbers] = useState<any[]>([]);
+  const [officialSites, setOfficialSites] = useState<any[]>([]);
   const { t } = useTranslation();
+
+  // Admin-managed content — updates for everyone with no app build required.
+  useEffect(() => {
+    const u1 = onSnapshot(
+      query(collection(db, 'usefulNumbers'), orderBy('createdAt', 'asc')),
+      snap => setUsefulNumbers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    const u2 = onSnapshot(
+      query(collection(db, 'officialSites'), orderBy('createdAt', 'asc')),
+      snap => setOfficialSites(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => { u1(); u2(); };
+  }, []);
+
+  const numberGroups = useMemo(() => {
+    const groups: { group: string; items: any[] }[] = [];
+    usefulNumbers.forEach(item => {
+      let g = groups.find(g => g.group === item.group);
+      if (!g) { g = { group: item.group, items: [] }; groups.push(g); }
+      g.items.push(item);
+    });
+    return groups;
+  }, [usefulNumbers]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#e8ecf0' }}>
@@ -157,6 +266,20 @@ export default function AboutBurkinaScreen() {
               <Text style={styles.infoLabel}>{t('Voyager')}</Text>
               <View style={styles.infoValueRow}>
                 <Text style={styles.infoValue}>{t('Informations de voyage')}</Text>
+                <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.infoCard} onPress={() => setNumbersModalVisible(true)} activeOpacity={0.75}>
+              <Text style={styles.infoLabel}>{t('Urgences')}</Text>
+              <View style={styles.infoValueRow}>
+                <Text style={styles.infoValue}>{t('Numéros utiles')}</Text>
+                <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.infoCard} onPress={() => setSitesModalVisible(true)} activeOpacity={0.75}>
+              <Text style={styles.infoLabel}>{t('Liens officiels')}</Text>
+              <View style={styles.infoValueRow}>
+                <Text style={styles.infoValue}>{t('Sites officiels')}</Text>
                 <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
               </View>
             </TouchableOpacity>
@@ -288,7 +411,32 @@ export default function AboutBurkinaScreen() {
               <Ionicons name="open-outline" size={18} color={Colors.primary} />
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.travelLinkCard}
+              onPress={() => Linking.openURL(SANTE_URL)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.travelLinkIcon, { backgroundColor: Colors.primary + '1c' }]}>
+                <Ionicons name="medkit-outline" size={22} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.travelLinkTitle}>{t('Fièvre jaune : vérifier les exigences')}</Text>
+                <Text style={styles.travelLinkSub}>{t('Site officiel sante.gov.bf')}</Text>
+              </View>
+              <Ionicons name="open-outline" size={18} color={Colors.primary} />
+            </TouchableOpacity>
+
             <View style={styles.tipsSection}>
+              <View style={styles.tipsHeaderRow}>
+                <Ionicons name="bug-outline" size={18} color={Colors.cta} />
+                <Text style={styles.tipsTitle}>{t('Paludisme : comment se protéger')}</Text>
+              </View>
+              <Text style={styles.tipsParagraph}>
+                {t("Le paludisme est présent toute l'année au Burkina Faso, avec un risque accru pendant la saison des pluies. Dormez sous une moustiquaire imprégnée d'insecticide (MILDA), même pour de courts séjours. Éliminez les eaux stagnantes autour du logement, qui servent de lieux de reproduction aux moustiques. Le soir et la nuit, portez des vêtements longs et couvrants et utilisez un répulsif anti-moustiques sur la peau exposée.")}
+              </Text>
+            </View>
+
+            <View style={[styles.tipsSection, { marginTop: 10 }]}>
               <View style={styles.tipsHeaderRow}>
                 <Ionicons name="partly-sunny-outline" size={18} color={Colors.cta} />
                 <Text style={styles.tipsTitle}>{t('Conseils météo')}</Text>
@@ -297,6 +445,81 @@ export default function AboutBurkinaScreen() {
                 {t("Le Burkina Faso connaît deux grandes saisons. La saison sèche (novembre à mai) est marquée par l'harmattan, un vent chaud et poussiéreux, avec des températures pouvant dépasser 35°C en mars-avril — prévoyez des vêtements légers, un chapeau et une bonne hydratation. La saison des pluies (juin à septembre) apporte des averses parfois intenses en fin de journée, avec une chaleur plus humide; un vêtement de pluie léger est utile. Les soirées peuvent être plus fraîches en décembre-janvier, surtout la nuit.")}
               </Text>
             </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* USEFUL NUMBERS MODAL */}
+      <Modal
+        visible={numbersModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setNumbersModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={Colors.headerGradient[0]} />
+          <LinearGradient
+            colors={Colors.headerGradient}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.modalHeader}
+          >
+            <Text style={styles.modalTitle}>{t('Numéros utiles')}</Text>
+            <TouchableOpacity onPress={() => setNumbersModalVisible(false)}>
+              <Text style={styles.modalClose}>✕</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            {numberGroups.length === 0 ? (
+              <Text style={styles.tipsParagraph}>{t('Aucun numéro pour le moment.')}</Text>
+            ) : (
+              numberGroups.map((g, i) => (
+                <View key={g.group} style={i > 0 ? { marginTop: 16 } : undefined}>
+                  <Text style={[styles.tipsTitle, { marginBottom: 10 }]}>{g.group}</Text>
+                  {g.items.map(item => (
+                    <NumberRow key={item.id} label={item.label} number={item.number} />
+                  ))}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* OFFICIAL SITES MODAL */}
+      <Modal
+        visible={sitesModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSitesModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={Colors.headerGradient[0]} />
+          <LinearGradient
+            colors={Colors.headerGradient}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.modalHeader}
+          >
+            <Text style={styles.modalTitle}>{t('Sites officiels')}</Text>
+            <TouchableOpacity onPress={() => setSitesModalVisible(false)}>
+              <Text style={styles.modalClose}>✕</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            {officialSites.length === 0 ? (
+              <Text style={styles.tipsParagraph}>{t('Aucun site pour le moment.')}</Text>
+            ) : (
+              officialSites.map(item => (
+                <SiteCard
+                  key={item.id}
+                  name={item.name}
+                  description={item.description}
+                  website={item.website}
+                  facebook={item.facebook}
+                />
+              ))
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -354,6 +577,18 @@ const styles = StyleSheet.create({
   travelLinkIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   travelLinkTitle: { fontSize: 14, fontWeight: '400', color: '#1A1A1A', marginBottom: 2 },
   travelLinkSub: { fontSize: 12, color: '#8A8A8A' },
+  siteCard: {
+    backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 12,
+    elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3,
+  },
+  siteCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  siteCardDesc: { fontSize: 13, lineHeight: 19, color: '#5A5A5A', marginBottom: 10 },
+  siteCardLinks: { flexDirection: 'row', gap: 10 },
+  siteCardLinkBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.primary + '14', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  siteCardLinkText: { fontSize: 12.5, fontWeight: '600', color: Colors.primary },
   tipsSection: { marginTop: 10, backgroundColor: '#fff', borderRadius: 10, padding: 14 },
   tipsHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   tipsTitle: { fontSize: 15, fontWeight: '400', color: '#1A1A1A' },

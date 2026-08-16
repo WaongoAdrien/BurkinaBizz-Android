@@ -1,9 +1,9 @@
 // app/tourism/[id].tsx — Tourist Site Detail Screen
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, Share,
-  StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions,
+  StyleSheet, Linking, Alert, ActivityIndicator, FlatList, Dimensions, StatusBar, Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +29,9 @@ registerTranslations({
   "Impossible d'ouvrir Google Maps.": 'Unable to open Google Maps.',
   "Impossible d'ouvrir Facebook.": 'Unable to open Facebook.',
   "Impossible d'ouvrir le site web.": 'Unable to open the website.',
+  "Impossible d'ouvrir ce lien.": 'Unable to open this link.',
   'Découvert sur BurkinaBizz': 'Discovered on BurkinaBizz',
+  'Hôtels recommandés': 'Recommended hotels',
 });
 
 const { width } = Dimensions.get('window');
@@ -50,6 +52,7 @@ interface Attraction {
   schedule?: string;
   latitude?: number;
   longitude?: number;
+  hotels?: { name: string; link: string }[];
 }
 
 function SectionHeader({ icon, color, title, theme }: { icon: keyof typeof Ionicons.glyphMap; color: string; title: string; theme: any }) {
@@ -79,6 +82,9 @@ export default function TourismSiteDetailScreen() {
   const [site, setSite] = useState<Attraction | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePhoto, setActivePhoto] = useState(0);
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [viewerPhotoIndex, setViewerPhotoIndex] = useState(0);
+  const imageViewerRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -103,6 +109,10 @@ export default function TourismSiteDetailScreen() {
   const openWebsite = () => {
     if (!site?.website) return;
     Linking.openURL(normalizeUrl(site.website)).catch(() => Alert.alert(t('Erreur'), t("Impossible d'ouvrir le site web.")));
+  };
+
+  const openHotelLink = (link: string) => {
+    Linking.openURL(normalizeUrl(link)).catch(() => Alert.alert(t('Erreur'), t("Impossible d'ouvrir ce lien.")));
   };
 
   const handleShare = async () => {
@@ -180,8 +190,17 @@ export default function TourismSiteDetailScreen() {
                       setActivePhoto(Math.round(offsetX / containerWidth));
                     }}
                     scrollEventThrottle={16}
-                    renderItem={({ item }) => (
-                      <Image source={{ uri: item }} style={[styles.photo, { width: Math.min(width, 600) }]} resizeMode="cover" />
+                    renderItem={({ item, index }) => (
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => {
+                          setViewerPhotoIndex(index);
+                          setShowImageViewer(true);
+                        }}
+                        style={{ width: Math.min(width, 600) }}
+                      >
+                        <Image source={{ uri: item }} style={[styles.photo, { width: Math.min(width, 600) }]} resizeMode="cover" />
+                      </TouchableOpacity>
                     )}
                   />
                   {photos.length > 1 && (
@@ -263,11 +282,103 @@ export default function TourismSiteDetailScreen() {
                 </View>
               </View>
             )}
+
+            {/* HÔTELS RECOMMANDÉS */}
+            {!!site.hotels?.length && (
+              <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
+                <SectionHeader icon="bed-outline" color={Colors.headerGradient[0]} title={t('Hôtels recommandés')} theme={theme} />
+                <View style={{ gap: 8 }}>
+                  {site.hotels.map((hotel, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.hotelRow, { borderColor: theme.border }]}
+                      onPress={() => openHotelLink(hotel.link)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="bed-outline" size={18} color={Colors.headerGradient[0]} />
+                      <Text style={[styles.hotelRowText, { color: theme.text }]} numberOfLines={1}>{hotel.name}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </ContentContainer>
 
           <View style={{ height: 40 }} />
         </ScrollView>
       </LinearGradient>
+
+      {/* FULL-SCREEN IMAGE VIEWER */}
+      <Modal
+        visible={showImageViewer}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageViewer(false)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setShowImageViewer(false)}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          {photos.length > 1 && (
+            <View style={styles.imageViewerCounter}>
+              <Text style={styles.imageViewerCounterText}>
+                {viewerPhotoIndex + 1} / {photos.length}
+              </Text>
+            </View>
+          )}
+
+          <FlatList
+            ref={imageViewerRef}
+            data={photos}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => `viewer-${i}`}
+            initialScrollIndex={viewerPhotoIndex}
+            getItemLayout={(_, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                imageViewerRef.current?.scrollToIndex({ index: info.index, animated: false });
+              }, 50);
+            }}
+            onMomentumScrollEnd={e => setViewerPhotoIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+            renderItem={({ item }) => (
+              <View style={styles.imageViewerSlide}>
+                <Image
+                  source={{ uri: item }}
+                  style={styles.imageViewerPhoto}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+          />
+
+          {photos.length > 1 && (
+            <View style={styles.imageViewerDots}>
+              {photos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.imageViewerDot,
+                    { backgroundColor: i === viewerPhotoIndex ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
@@ -294,10 +405,20 @@ const styles = StyleSheet.create({
   contactRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   contactBtn: { flex: 1, minWidth: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 7, gap: 6 },
   contactBtnText: { color: '#fff', fontSize: 14, fontWeight: '400' },
+  hotelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 7, paddingVertical: 12, paddingHorizontal: 12 },
+  hotelRowText: { flex: 1, fontSize: 14 },
   shareFab: {
     position: 'absolute', top: 16, right: 16, zIndex: 10,
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(11,30,61,0.6)', alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
   },
+  imageViewerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+  imageViewerClose: { position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  imageViewerCounter: { position: 'absolute', top: 50, left: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 7 },
+  imageViewerCounterText: { fontSize: 14, color: '#fff', fontWeight: '400' },
+  imageViewerSlide: { width, height: '100%', justifyContent: 'center', alignItems: 'center' },
+  imageViewerPhoto: { width: '100%', height: '100%' },
+  imageViewerDots: { position: 'absolute', bottom: 40, alignSelf: 'center', flexDirection: 'row', gap: 6 },
+  imageViewerDot: { width: 8, height: 8, borderRadius: 4 },
 });
