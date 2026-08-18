@@ -16,6 +16,7 @@ import { useColorTheme } from '../../hooks/useColorTheme';
 import { ContentContainer } from '../../components/ContentContainer';
 import { AppHeader } from '../../components/AppHeader';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
+import { formatEventDateRange } from '../../lib/eventDate';
 
 registerTranslations({
   'Événement introuvable': 'Event not found',
@@ -44,6 +45,7 @@ interface EventItem {
   location: string;
   phone?: string;
   date?: string;
+  endDate?: string;
   description: string;
   mapLink?: string;
   facebook?: string;
@@ -72,7 +74,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { isAdmin } = useAuth();
   const { theme } = useColorTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -229,7 +231,9 @@ export default function EventDetailScreen() {
             {!!event.date && (
               <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
                 <SectionHeader icon="calendar-outline" color={Colors.headerGradient[0]} title={t('Date')} theme={theme} />
-                <Text style={[styles.bodyText, { color: theme.textSecondary }]}>{event.date}</Text>
+                <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
+                  {formatEventDateRange(event.date, event.endDate, language) || event.date}
+                </Text>
               </View>
             )}
 

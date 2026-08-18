@@ -53,14 +53,14 @@ export interface User {
 }
 
 export type ProductCategory =
-  | 'Électronique'
   | 'Téléphones & Tablettes'
-  | 'Vêtements & Mode'
-  | 'Meubles & Maison'
+  | 'Électronique'
+  | 'Produits Locaux'
   | 'Véhicules'
-  | 'Beauté & Santé'
-  | 'Sports & Loisirs'
-  | 'Livres & Éducation'
+  | 'Mode & Vêtements'
+  | 'Meubles & Maison'
+  | 'Immobilier'
+  | 'Loisirs & Sports'
   | 'Bébé & Enfants'
   | 'Autres';
 
@@ -81,9 +81,12 @@ export interface Product {
   photos?: string[];       // NEW: multiple photos, photos[0] is the cover
   price: number;
   negotiable?: boolean;    // NEW: price is open to negotiation
+  stockStatus?: 'in_stock' | 'out_of_stock' | 'sold'; // NEW: inventory status shown as a badge
+  stockQty?: number;       // NEW: remaining quantity when in_stock (shown instead of the generic "In stock" badge)
   whatsapp?: string;       // NEW: seller WhatsApp number
   phone?: string;          // NEW: seller phone number
   ownerId?: string;        // NEW: uid of the seller
+  ownerName?: string;      // NEW: display name of the seller, for admin visibility
   status?: 'pending' | 'approved'; // NEW: moderation status, mirrors businesses
   createdAt?: string | Date;
 }

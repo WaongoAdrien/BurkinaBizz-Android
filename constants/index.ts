@@ -55,16 +55,16 @@ export const CATEGORIES: CategoryItem[] = [
 
 // Product marketplace categories (distinct from business CATEGORIES above)
 export const PRODUCT_CATEGORIES: ProductCategoryItem[] = [
-  { label: 'Électronique',           icon: 'devices',         iconFamily: 'MaterialIcons', color: '#F59E0B' },
-  { label: 'Téléphones & Tablettes', icon: 'smartphone',      iconFamily: 'MaterialIcons', color: '#3B82F6' },
-  { label: 'Vêtements & Mode',       icon: 'checkroom',       iconFamily: 'MaterialIcons', color: '#EC4899' },
-  { label: 'Meubles & Maison',       icon: 'chair',           iconFamily: 'MaterialIcons', color: '#8B5CF6' },
-  { label: 'Véhicules',              icon: 'directions-car',  iconFamily: 'MaterialIcons', color: '#EF4444' },
-  { label: 'Beauté & Santé',         icon: 'spa',             iconFamily: 'MaterialIcons', color: '#06B6D4' },
-  { label: 'Sports & Loisirs',       icon: 'sports-soccer',   iconFamily: 'MaterialIcons', color: '#0EA5E9' },
-  { label: 'Livres & Éducation',     icon: 'menu-book',       iconFamily: 'MaterialIcons', color: '#6366F1' },
-  { label: 'Bébé & Enfants',         icon: 'child-friendly',  iconFamily: 'MaterialIcons', color: '#F97316' },
-  { label: 'Autres',                 icon: 'more-horiz',      iconFamily: 'MaterialIcons', color: '#6B7280' },
+  { label: 'Téléphones & Tablettes', icon: 'phone-iphone',      iconFamily: 'MaterialIcons', color: '#F97316' },
+  { label: 'Électronique',           icon: 'devices',           iconFamily: 'MaterialIcons', color: '#F59E0B' },
+  { label: 'Produits Locaux',        icon: 'eco',               iconFamily: 'MaterialIcons', color: '#22C55E' },
+  { label: 'Véhicules',              icon: 'directions-car',    iconFamily: 'MaterialIcons', color: '#EF4444' },
+  { label: 'Mode & Vêtements',       icon: 'checkroom',         iconFamily: 'MaterialIcons', color: '#EC4899' },
+  { label: 'Meubles & Maison',       icon: 'chair',             iconFamily: 'MaterialIcons', color: '#8B5CF6' },
+  { label: 'Immobilier',             icon: 'home-work',         iconFamily: 'MaterialIcons', color: '#64748B' },
+  { label: 'Loisirs & Sports',       icon: 'sports-soccer',     iconFamily: 'MaterialIcons', color: '#0EA5E9' },
+  { label: 'Bébé & Enfants',         icon: 'child-friendly',    iconFamily: 'MaterialIcons', color: '#10B981' },
+  { label: 'Autres',                 icon: 'more-horiz',        iconFamily: 'MaterialIcons', color: '#6B7280' },
 ];
 
 export const CITIES: City[] = [

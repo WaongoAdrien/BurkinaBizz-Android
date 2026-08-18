@@ -12,6 +12,7 @@ import { Colors } from '../constants';
 import { useAuth } from '../lib/AuthContext';
 import { likeProduct, unlikeProduct, subscribeLikes } from '../lib/likes';
 import { useTranslation, registerTranslations } from '../lib/LanguageContext';
+import { getStockBadge } from '../lib/productStock';
 
 registerTranslations({
   'Connexion requise': 'Sign-in required',
@@ -31,7 +32,8 @@ export default function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const { theme } = useColorTheme();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const stockBadge = getStockBadge(product, language);
 
   const [liked, setLiked] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
@@ -90,12 +92,6 @@ export default function ProductCard({ product }: ProductCardProps) {
         <Text style={styles.badgeText}>{product.category}</Text>
       </View>
 
-      {product.negotiable && (
-        <View style={styles.negotiableBadge}>
-          <Text style={styles.negotiableBadgeText}>{t('Négociable')}</Text>
-        </View>
-      )}
-
       {/* Like button */}
       <TouchableOpacity
         style={[styles.likeBtn, liked && { backgroundColor: '#b39da0c4' }]}
@@ -114,7 +110,19 @@ export default function ProductCard({ product }: ProductCardProps) {
           {product.name}
         </Text>
         <Text style={[styles.city, { color: theme.textSecondary }]}>📍 {product.city}</Text>
-        <Text style={styles.price}>{product.price.toLocaleString('fr-FR')} FCFA</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{product.price.toLocaleString('fr-FR')} FCFA</Text>
+          {product.negotiable && (
+            <View style={[styles.tag, { backgroundColor: '#2E7D3222' }]}>
+              <Text style={[styles.tagText, { color: '#2E7D32' }]}>{t('Négociable')}</Text>
+            </View>
+          )}
+          {stockBadge && (
+            <View style={[styles.tag, { backgroundColor: stockBadge.color + '22' }]}>
+              <Text style={[styles.tagText, { color: stockBadge.color }]}>{stockBadge.label}</Text>
+            </View>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -135,12 +143,6 @@ const styles = StyleSheet.create({
     borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3,
   },
   badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '400' },
-  negotiableBadge: {
-    position: 'absolute', top: 32, left: 8,
-    backgroundColor: '#2E7D32DD',
-    borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  negotiableBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '400' },
   likeBtn: {
     position: 'absolute', top: 8, right: 8,
     backgroundColor: 'rgba(255,255,255,0.9)',
@@ -151,5 +153,8 @@ const styles = StyleSheet.create({
   info: { padding: 10, gap: 4 },
   name: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
   city: { fontSize: 12 },
-  price: { fontSize: 15, fontWeight: '400', color: Colors.primary, marginTop: 2 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  price: { fontSize: 15, fontWeight: '400', color: Colors.primary },
+  tag: { borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
+  tagText: { fontSize: 10, fontWeight: '400' },
 });

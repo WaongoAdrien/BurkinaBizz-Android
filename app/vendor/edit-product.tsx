@@ -1,4 +1,4 @@
-// app/vendor/edit-business.tsx
+// app/vendor/edit-product.tsx
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -15,22 +15,25 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
 import { containsProfanity } from '../../lib/profanityFilter';
 import { useAuth } from '../../lib/AuthContext';
-import { Colors, CATEGORIES, CITIES, CITY_CATEGORIES } from '../../constants';
+import { Colors, PRODUCT_CATEGORIES, CITIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
-import { Category, City, BusinessLocation, OpeningHours } from '../../types';
-import { emptyOpeningHours, hasAnyOpeningHours } from '../../lib/openingHours';
-import { OpeningHoursEditor } from '../../components/OpeningHoursEditor';
-import LocationPicker from '../../components/Locationpicker';
+import { ProductCategory, City } from '../../types';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
 import { AppHeader } from '../../components/AppHeader';
 
 registerTranslations({
   'optionnel': 'optional',
+  'Disponibilité': 'Availability',
+  'En stock': 'In stock',
+  'Rupture de stock': 'Out of stock',
+  'Vendu': 'Sold',
+  'Quantité restante (optionnel)': 'Remaining quantity (optional)',
+  'Ex: 3': 'Ex: 3',
   'Annuler': 'Cancel',
   'Erreur': 'Error',
-  'Entreprise introuvable.': 'Business not found.',
+  'Produit introuvable.': 'Product not found.',
   'Accès refusé': 'Access denied',
-  'Vous ne pouvez modifier que vos propres entreprises.': 'You can only edit your own businesses.',
+  'Vous ne pouvez modifier que vos propres produits.': 'You can only edit your own products.',
   'Maximum atteint': 'Maximum reached',
   'Maximum 5 photos.': 'Maximum 5 photos.',
   'Ajouter des photos': 'Add photos',
@@ -41,39 +44,25 @@ registerTranslations({
   'Nom requis': 'Name required',
   'Langage inapproprié / Inappropriate language': 'Inappropriate language',
   'Description requise': 'Description required',
-  'Numéro valide requis': 'Valid phone number required',
+  'Prix valide requis': 'Valid price required',
   '✅ Mise à jour réussie!': '✅ Update successful!',
   'Les informations ont été enregistrées.': 'The information has been saved.',
   'OK': 'OK',
   "Impossible de sauvegarder. Vérifiez votre connexion.": 'Unable to save. Check your connection.',
-  "Modifier l'entreprise": 'Edit business',
-  '📋 Informations générales': '📋 General information',
-  "Nom de l'entreprise *": 'Business name *',
-  'Ex: Restaurant Chez Fatou': 'Ex: Restaurant Chez Fatou',
+  'Modifier le produit': 'Edit product',
+  "Nom du produit *": 'Product name *',
+  'Ex: iPhone 13 Pro Max 256GB': 'Ex: iPhone 13 Pro Max 256GB',
+  'Catégorie *': 'Category *',
   'Ville *': 'City *',
-  "Catégories * (sélectionnez toutes les catégories qui s'appliquent)": 'Categories * (select all that apply)',
   'Description *': 'Description *',
-  'Décrivez votre entreprise...': 'Describe your business...',
-  '📞 Contact': '📞 Contact',
-  'Téléphone *': 'Phone *',
+  'État, caractéristiques, raison de la vente...': 'Condition, features, reason for selling...',
+  'Prix (FCFA) *': 'Price (FCFA) *',
+  'Ex: 350000': 'Ex: 350000',
+  'Prix négociable': 'Negotiable price',
+  "L'acheteur pourra proposer un prix différent": 'Buyers will be able to offer a different price',
+  'Téléphone': 'Phone',
   'WhatsApp': 'WhatsApp',
   '+22670000000 (si différent)': '+22670000000 (if different)',
-  '🌐 Réseaux sociaux': '🌐 Social networks',
-  'Facebook': 'Facebook',
-  'Lien ou nom de la page': 'Link or page name',
-  'Instagram': 'Instagram',
-  '@nomutilisateur': '@username',
-  'Site web': 'Website',
-  '⭐ Position (Admin)': '⭐ Position (Admin)',
-  'Priorité': 'Priority',
-  '0-100 (plus élevé = apparaît en premier)': '0-100 (higher = appears first)',
-  '💡 0 = ordre par défaut • 100 = tout en haut': '💡 0 = default order • 100 = top',
-  '📍 Localisation': '📍 Location',
-  '(optionnel)': '(optional)',
-  'GPS:': 'GPS:',
-  'Modifier': 'Edit',
-  'Ajouter une localisation': 'Add a location',
-  '📷 Photos': '📷 Photos',
   'Appuyez sur une photo existante pour la supprimer.': 'Tap an existing photo to delete it.',
   'Couverture': 'Cover',
   'Nouveau': 'New',
@@ -81,11 +70,18 @@ registerTranslations({
   'Upload:': 'Upload:',
   'Sauvegarde...': 'Saving...',
   '💾  Sauvegarder les modifications': '💾  Save changes',
-  'Catégorie': 'Category',
   'Ville': 'City',
-  '🕐 Horaires d\'ouverture': '🕐 Opening hours',
-  "Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.":
-    "Set your opening hours for each day. Customers will see a live « Open »/« Closed » badge.",
+  'Catégorie': 'Category',
+  'Téléphones & Tablettes': 'Phones & Tablets',
+  'Électronique': 'Electronics',
+  'Produits Locaux': 'Local Products',
+  'Véhicules': 'Vehicles',
+  'Mode & Vêtements': 'Fashion & Clothing',
+  'Meubles & Maison': 'Furniture & Home',
+  'Immobilier': 'Real Estate',
+  'Loisirs & Sports': 'Leisure & Sports',
+  'Bébé & Enfants': 'Baby & Kids',
+  'Autres': 'Other',
 });
 
 // ── Shared components (outside to avoid focus-loss bug) ───────────────────────
@@ -129,15 +125,17 @@ function PickerModal({ visible, title, items, selected, onSelect, onClose, cardC
     <View style={styles.pickerOverlay}>
       <View style={[styles.pickerSheet, { backgroundColor: cardColor }]}>
         <Text style={[styles.pickerTitle, { color: textColor }]}>{title}</Text>
-        {items.map(item => (
-          <TouchableOpacity key={item}
-            style={[styles.pickerItem, selected === item && { backgroundColor: Colors.primary + '22' }]}
-            onPress={() => { onSelect(item); onClose(); }}>
-            <Text style={[styles.pickerItemText, { color: selected === item ? Colors.primary : textColor },
-              selected === item && { fontWeight: '400' }]}>{item}</Text>
-            {selected === item && <Text style={{ color: Colors.primary }}>✓</Text>}
-          </TouchableOpacity>
-        ))}
+        <ScrollView style={{ maxHeight: 360 }}>
+          {items.map(item => (
+            <TouchableOpacity key={item}
+              style={[styles.pickerItem, selected === item && { backgroundColor: Colors.primary + '22' }]}
+              onPress={() => { onSelect(item); onClose(); }}>
+              <Text style={[styles.pickerItemText, { color: selected === item ? Colors.primary : textColor },
+                selected === item && { fontWeight: '400' }]}>{t(item)}</Text>
+              {selected === item && <Text style={{ color: Colors.primary }}>✓</Text>}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
         <TouchableOpacity style={styles.pickerClose} onPress={onClose}>
           <Text style={[styles.pickerCloseText, { color: secondaryColor }]}>{t('Annuler')}</Text>
         </TouchableOpacity>
@@ -147,9 +145,9 @@ function PickerModal({ visible, title, items, selected, onSelect, onClose, cardC
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_PHOTOS = 10;
+const MAX_PHOTOS = 5;
 
-export default function EditBusinessScreen() {
+export default function EditProductScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, isAdmin } = useAuth();
@@ -157,24 +155,18 @@ export default function EditBusinessScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
-  // Form state
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<Category>('Alimentation');
-  const [categories, setCategories] = useState<Category[]>(['Alimentation']);
+  const [category, setCategory] = useState<ProductCategory>('Autres');
   const [city, setCity] = useState<City>('Ouagadougou');
   const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [negotiable, setNegotiable] = useState(false);
+  const [stockStatus, setStockStatus] = useState<'in_stock' | 'out_of_stock' | 'sold'>('in_stock');
+  const [stockQty, setStockQty] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [facebook, setFacebook] = useState('');
-  const [instagram, setInstagram] = useState('');
-  const [website, setWebsite] = useState('');
-  const [priority, setPriority] = useState<number>(0);
-  const [location, setLocation] = useState<BusinessLocation | undefined>(undefined);
-  const [openingHours, setOpeningHours] = useState<OpeningHours>(emptyOpeningHours());
 
-  // Existing remote photo URLs
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
-  // New local URIs to upload
   const [newPhotoUris, setNewPhotoUris] = useState<string[]>([]);
 
   const [fetchLoading, setFetchLoading] = useState(true);
@@ -182,59 +174,34 @@ export default function EditBusinessScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const fp = { borderColor: '#9CA3AF', surfaceColor: '#FFFFFF', textColor: theme.text, secondaryColor: theme.textSecondary };
   const totalPhotos = existingPhotos.length + newPhotoUris.length;
 
-  // Load existing business data
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'businesses', id)).then(snap => {
-      if (!snap.exists()) { Alert.alert(t('Erreur'), t('Entreprise introuvable.')); router.back(); return; }
+    getDoc(doc(db, 'products', id)).then(snap => {
+      if (!snap.exists()) { Alert.alert(t('Erreur'), t('Produit introuvable.')); router.back(); return; }
       const d = snap.data();
-      // Guard: only owner or admin can edit
       if (d.ownerId !== user?.uid && !isAdmin) {
-        Alert.alert(t('Accès refusé'), t('Vous ne pouvez modifier que vos propres entreprises.'));
+        Alert.alert(t('Accès refusé'), t('Vous ne pouvez modifier que vos propres produits.'));
         router.back();
         return;
       }
       setName(d.name || '');
-      setCategory(d.category || 'Alimentation');
-      setCategories(d.categories || [d.category || 'Alimentation']); // Load categories or fallback to single category
+      setCategory(d.category || 'Autres');
       setCity(d.city || 'Ouagadougou');
       setDescription(d.description || '');
+      setPrice(d.price ? String(d.price) : '');
+      setNegotiable(!!d.negotiable);
+      setStockStatus(d.stockStatus === 'out_of_stock' || d.stockStatus === 'sold' ? d.stockStatus : 'in_stock');
+      setStockQty(typeof d.stockQty === 'number' ? String(d.stockQty) : '');
       setPhone(d.phone || '');
       setWhatsapp(d.whatsapp || '');
-      setFacebook(d.facebook || '');
-      setInstagram(d.instagram || '');
-      setWebsite(d.website || '');
-      setPriority(d.priority || 0);
-      setOpeningHours(d.openingHours || emptyOpeningHours());
-      setExistingPhotos(d.photos || (d.coverPhoto ? [d.coverPhoto] : []));
-      if (d.location) setLocation(d.location);
+      setExistingPhotos(d.photos || (d.imageUrl ? [d.imageUrl] : []));
     }).finally(() => setFetchLoading(false));
   }, [id]);
-
-  // Clear invalid categories when city changes
-  useEffect(() => {
-    const availableCategories = CITY_CATEGORIES[city] || CATEGORIES.map(c => c.label);
-    const validCategories = categories.filter(cat => availableCategories.includes(cat));
-    
-    if (validCategories.length !== categories.length) {
-      // Some categories are invalid for this city
-      if (validCategories.length > 0) {
-        setCategories(validCategories);
-        setCategory(validCategories[0]);
-      } else {
-        // No valid categories, set to first available
-        const firstAvailable = availableCategories[0] as Category;
-        setCategories([firstAvailable]);
-        setCategory(firstAvailable);
-      }
-    }
-  }, [city]);
 
   const pickPhotos = async () => {
     if (totalPhotos >= MAX_PHOTOS) {
@@ -281,17 +248,17 @@ export default function EditBusinessScreen() {
     else if (containsProfanity(name)) e.name = 'Langage inapproprié / Inappropriate language';
     if (!description.trim()) e.description = 'Description requise';
     else if (containsProfanity(description)) e.description = 'Langage inapproprié / Inappropriate language';
-    if (!phone.trim() || phone.replace(/\D/g, '').length < 8) e.phone = 'Numéro valide requis';
+    const numPrice = parseInt(price.replace(/\D/g, ''), 10);
+    if (!price.trim() || isNaN(numPrice) || numPrice <= 0) e.price = 'Prix valide requis';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const uploadPhoto = async (uri: string, index: number): Promise<string> => {
-    // Fetch image as blob using fetch API (compatible with new architecture)
     const response = await fetch(uri);
     const blob = await response.blob();
-    
-    const storageRef = ref(storage, `businesses/${user!.uid}/${Date.now()}_${index}.jpg`);
+
+    const storageRef = ref(storage, `products/${user!.uid}/${Date.now()}_${index}.jpg`);
     return new Promise((resolve, reject) => {
       const task = uploadBytesResumable(storageRef, blob);
       task.on('state_changed',
@@ -311,41 +278,25 @@ export default function EditBusinessScreen() {
     setLoading(true);
     setUploadProgress(0);
     try {
-      // Upload new photos
       const newUrls: string[] = [];
       for (let i = 0; i < newPhotoUris.length; i++) {
         try { newUrls.push(await uploadPhoto(newPhotoUris[i], i)); } catch {}
       }
       const allPhotos = [...existingPhotos, ...newUrls];
 
-      // Build update data object
-      const updateData: any = {
+      await updateDoc(doc(db, 'products', id), {
         name: name.trim(),
-        category,              // Primary category
-        categories,            // All selected categories
+        category,
         city,
         description: description.trim(),
-        phone: phone.trim(),
+        price: parseInt(price.replace(/\D/g, ''), 10),
+        negotiable,
+        stockStatus,
+        stockQty: stockStatus === 'in_stock' && stockQty.trim() ? parseInt(stockQty, 10) : null,
+        phone: phone.trim() || null,
         whatsapp: whatsapp.trim() || null,
-        facebook: facebook.trim() || null,
-        instagram: instagram.trim() || null,
-        website: website.trim() || null,
-        openingHours: hasAnyOpeningHours(openingHours) ? openingHours : null,
         photos: allPhotos,
-        coverPhoto: allPhotos[0] || '',
-        location: location && (location.address || location.latitude) ? {
-          address: location.address ?? null,
-          latitude: location.latitude ?? null,
-          longitude: location.longitude ?? null,
-        } : null,
-      };
-
-      // Only admins can update priority
-      if (isAdmin) {
-        updateData.priority = priority || 0;
-      }
-
-      await updateDoc(doc(db, 'businesses', id), updateData);
+      });
 
       Alert.alert(t('✅ Mise à jour réussie!'), t('Les informations ont été enregistrées.'),
         [{ text: t('OK'), onPress: () => router.back() }]);
@@ -358,7 +309,7 @@ export default function EditBusinessScreen() {
 
   if (fetchLoading) return (
     <View style={{ flex: 1 }}>
-      <AppHeader title={t("Modifier l'entreprise")} />
+      <AppHeader title={t('Modifier le produit')} />
       <LinearGradient
         colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
         style={styles.loadingBox}
@@ -374,15 +325,22 @@ export default function EditBusinessScreen() {
         colors={(theme.backgroundGradient || [theme.background, theme.background]) as [string, string, ...string[]]}
         style={{ flex: 1 }}
       >
-      <AppHeader title={t("Modifier l'entreprise")} />
+      <AppHeader title={t('Modifier le produit')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 16 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t('📋 Informations générales')}</Text>
-          <Field label={t("Nom de l'entreprise *")} value={name} onChangeText={setName}
-            placeholder={t('Ex: Restaurant Chez Fatou')} maxLength={80} error={errors.name} {...fp} />
+          <Field label={t('Nom du produit *')} value={name} onChangeText={setName}
+            placeholder={t('Ex: iPhone 13 Pro Max 256GB')} maxLength={80} error={errors.name} {...fp} />
 
-          {/* CITY SELECTION - MOVED FIRST */}
+          <View style={styles.fieldWrapper}>
+            <Text style={[styles.fieldLabel, { color: theme.text }]}>{t('Catégorie *')}</Text>
+            <TouchableOpacity style={[styles.selector, { borderColor: '#9CA3AF', backgroundColor: '#FFFFFF' }]}
+              onPress={() => { Keyboard.dismiss(); setShowCategoryPicker(true); }}>
+              <Text style={{ color: theme.text, fontSize: 15 }}>{t(category)}</Text>
+              <Text style={{ color: theme.textSecondary }}>▾</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.fieldWrapper}>
             <Text style={[styles.fieldLabel, { color: theme.text }]}>{t('Ville *')}</Text>
             <TouchableOpacity style={[styles.selector, { borderColor: '#9CA3AF', backgroundColor: '#FFFFFF' }]}
@@ -392,137 +350,55 @@ export default function EditBusinessScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* CATEGORIES - FILTERED BY CITY */}
-          <View style={styles.fieldWrapper}>
-            <Text style={[styles.fieldLabel, { color: theme.text }]}>{t("Catégories * (sélectionnez toutes les catégories qui s'appliquent)")}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-              {(() => {
-                // Get categories available in selected city
-                const availableCategories = CITY_CATEGORIES[city] || CATEGORIES.map(c => c.label);
-                const availableCategoryObjects = CATEGORIES.filter(cat => availableCategories.includes(cat.label));
-                
-                return availableCategoryObjects.map(cat => {
-                  const isSelected = categories.includes(cat.label as Category);
-                  return (
-                    <TouchableOpacity
-                      key={cat.label}
-                      style={[
-                        styles.categoryChip,
-                        { 
-                          backgroundColor: isSelected ? cat.color : theme.surface,
-                          borderColor: cat.color,
-                          borderWidth: 1.5,
-                        }
-                      ]}
-                      onPress={() => {
-                        if (isSelected) {
-                          // Unselect (but keep at least one)
-                          if (categories.length > 1) {
-                            setCategories(categories.filter(c => c !== cat.label));
-                            setCategory(categories.filter(c => c !== cat.label)[0]); // Update primary
-                          }
-                        } else {
-                          // Select
-                          setCategories([...categories, cat.label as Category]);
-                          if (categories.length === 0) setCategory(cat.label as Category); // Set as primary if first
-                        }
-                      }}
-                    >
-                      <Text style={{ 
-                        fontSize: 13, 
-                        fontWeight: '400',
-                        color: isSelected ? '#fff' : theme.text 
-                      }}>
-                        {cat.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                });
-              })()}
+          <Field label={t('Description *')} value={description} onChangeText={setDescription}
+            placeholder={t('État, caractéristiques, raison de la vente...')} multiline maxLength={600} error={errors.description} {...fp} />
+
+          <Field label={t('Prix (FCFA) *')} value={price} onChangeText={setPrice}
+            placeholder={t('Ex: 350000')} keyboardType="number-pad" error={errors.price} {...fp} />
+
+          <TouchableOpacity style={styles.negotiableRow} onPress={() => setNegotiable(v => !v)} activeOpacity={0.8}>
+            <View style={[styles.checkbox, { borderColor: Colors.primary }, negotiable && { backgroundColor: Colors.primary }]}>
+              {negotiable && <Text style={{ color: '#fff', fontSize: 13, fontWeight: '400' }}>✓</Text>}
             </View>
-            {errors.category && <Text style={styles.errorText}>{t(errors.category)}</Text>}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>{t('Prix négociable')}</Text>
+              <Text style={[styles.hint, { color: theme.textSecondary, marginBottom: 0 }]}>{t("L'acheteur pourra proposer un prix différent")}</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.fieldWrapper}>
+            <Text style={[styles.fieldLabel, { color: theme.text }]}>{t('Disponibilité')}</Text>
+            <View style={styles.stockRow}>
+              {(['in_stock', 'out_of_stock', 'sold'] as const).map(s => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.stockPill, { borderColor: stockStatus === s ? Colors.primary : '#9CA3AF' }, stockStatus === s && { backgroundColor: Colors.primary + '18' }]}
+                  onPress={() => setStockStatus(s)}
+                >
+                  <Text style={[styles.stockPillText, { color: stockStatus === s ? Colors.primary : theme.textSecondary }]}>
+                    {t(s === 'in_stock' ? 'En stock' : s === 'out_of_stock' ? 'Rupture de stock' : 'Vendu')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          <Field label={t('Description *')} value={description} onChangeText={setDescription}
-            placeholder={t('Décrivez votre entreprise...')} multiline maxLength={600} error={errors.description} {...fp} />
+          {stockStatus === 'in_stock' && (
+            <Field label={t('Quantité restante (optionnel)')} value={stockQty} onChangeText={v => setStockQty(v.replace(/\D/g, ''))}
+              placeholder={t('Ex: 3')} keyboardType="number-pad" optional {...fp} />
+          )}
         </View>
 
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t('📞 Contact')}</Text>
-          <Field label={t('Téléphone *')} value={phone} onChangeText={setPhone}
-            placeholder="+22670000000" keyboardType="phone-pad" error={errors.phone} {...fp} />
+          <Field label={t('Téléphone')} value={phone} onChangeText={setPhone}
+            placeholder="+22670000000" keyboardType="phone-pad" optional {...fp} />
           <Field label={t('WhatsApp')} value={whatsapp} onChangeText={setWhatsapp}
             placeholder={t('+22670000000 (si différent)')} keyboardType="phone-pad" optional {...fp} />
         </View>
 
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t("🕐 Horaires d'ouverture")}</Text>
-          <Text style={[styles.hint, { color: theme.textSecondary, marginTop: -8 }]}>
-            {t("Renseignez vos horaires d'ouverture pour chaque jour. Les clients verront un badge « Ouvert »/« Fermé » en temps réel.")}
-          </Text>
-          <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} theme={theme} />
-        </View>
-
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t('🌐 Réseaux sociaux')}</Text>
-          <Field label={t('Facebook')} value={facebook} onChangeText={setFacebook}
-            placeholder={t('Lien ou nom de la page')} optional {...fp} />
-          <Field label={t('Instagram')} value={instagram} onChangeText={setInstagram}
-            placeholder={t('@nomutilisateur')} optional {...fp} />
-          <Field label={t('Site web')} value={website} onChangeText={setWebsite}
-            placeholder="https://www.monentreprise.com" keyboardType="url" optional {...fp} />
-        </View>
-
-        {/* PRIORITY (ADMIN ONLY) */}
-        {isAdmin && (
-          <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.formSection, { color: Colors.primary }]}>{t('⭐ Position (Admin)')}</Text>
-            <Field
-              label={t('Priorité')}
-              value={String(priority)}
-              onChangeText={(text) => {
-                const num = parseInt(text) || 0;
-                setPriority(Math.max(0, Math.min(100, num))); // Clamp 0-100
-              }}
-              placeholder={t('0-100 (plus élevé = apparaît en premier)')}
-              keyboardType="number-pad"
-              {...fp}
-            />
-            <Text style={[styles.hint, { color: theme.textSecondary, marginTop: -8 }]}>
-              {t('💡 0 = ordre par défaut • 100 = tout en haut')}
-            </Text>
-          </View>
-        )}
-
-        {/* LOCALISATION */}
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t('📍 Localisation')} <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '400' }}>{t('(optionnel)')}</Text></Text>
-          {location?.address || location?.latitude ? (
-            <View style={[styles.locationPreview, { backgroundColor: Colors.primary + '15', borderColor: Colors.primary + '40' }]}>
-              <Text style={{ fontSize: 20 }}>📍</Text>
-              <View style={{ flex: 1 }}>
-                {location.address && <Text style={[styles.locationText, { color: theme.text }]} numberOfLines={2}>{location.address}</Text>}
-                {location.latitude && <Text style={[styles.locationCoords, { color: theme.textSecondary }]}>{t('GPS:')} {location.latitude.toFixed(4)}, {location.longitude?.toFixed(4)}</Text>}
-              </View>
-              <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowLocationPicker(true); }}>
-                <Text style={{ color: Colors.primary, fontWeight: '400', fontSize: 13 }}>{t('Modifier')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={[styles.addLocationBtn, { borderColor: Colors.primary }]}
-              onPress={() => { Keyboard.dismiss(); setShowLocationPicker(true); }}>
-              <Text style={{ fontSize: 24 }}>🗺️</Text>
-              <Text style={[styles.addLocationText, { color: Colors.primary }]}>{t('Ajouter une localisation')}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* PHOTOS */}
-        <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.formSection, { color: Colors.primary }]}>{t('📷 Photos')} ({totalPhotos}/{MAX_PHOTOS})</Text>
           <Text style={[styles.hint, { color: theme.textSecondary }]}>{t('Appuyez sur une photo existante pour la supprimer.')}</Text>
           <View style={styles.photoGrid}>
-            {/* Existing remote photos */}
             {existingPhotos.map((uri, i) => (
               <TouchableOpacity key={`e-${i}`} style={styles.photoThumbBox} onPress={() => removeExisting(i)}>
                 <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
@@ -534,7 +410,6 @@ export default function EditBusinessScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-            {/* New local photos */}
             {newPhotoUris.map((uri, i) => (
               <View key={`n-${i}`} style={styles.photoThumbBox}>
                 <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
@@ -553,7 +428,6 @@ export default function EditBusinessScreen() {
           </View>
         </View>
 
-        {/* UPLOAD PROGRESS */}
         {loading && uploadProgress > 0 && uploadProgress < 100 && (
           <View style={styles.progressBox}>
             <Text style={[styles.progressText, { color: theme.textSecondary }]}>{t('Upload:')} {uploadProgress}%</Text>
@@ -574,11 +448,8 @@ export default function EditBusinessScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      <LocationPicker visible={showLocationPicker} current={location}
-        onConfirm={(loc) => { setLocation(loc); setShowLocationPicker(false); }}
-        onClose={() => setShowLocationPicker(false)} theme={theme} />
-      <PickerModal visible={showCategoryPicker} title={t('Catégorie')} items={CATEGORIES.map(c => c.label)}
-        selected={category} onSelect={v => setCategory(v as Category)} onClose={() => setShowCategoryPicker(false)}
+      <PickerModal visible={showCategoryPicker} title={t('Catégorie')} items={PRODUCT_CATEGORIES.map(c => c.label)}
+        selected={category} onSelect={v => setCategory(v as ProductCategory)} onClose={() => setShowCategoryPicker(false)}
         cardColor={theme.card} textColor={theme.text} secondaryColor={theme.textSecondary} />
       <PickerModal visible={showCityPicker} title={t('Ville')} items={CITIES}
         selected={city} onSelect={v => setCity(v as City)} onClose={() => setShowCityPicker(false)}
@@ -593,7 +464,6 @@ const styles = StyleSheet.create({
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16 },
   formCard: { borderRadius: 10, padding: 16, borderWidth: 1, marginBottom: 14, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
-  formSection: { fontSize: 15, fontWeight: '400', marginBottom: 14 },
   fieldWrapper: { marginBottom: 14 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '400' },
@@ -603,11 +473,11 @@ const styles = StyleSheet.create({
   errorText: { color: '#D32F2F', fontSize: 12, marginTop: 4 },
   selector: { borderWidth: 2, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   hint: { fontSize: 12, marginBottom: 12, lineHeight: 18 },
-  locationPreview: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderRadius: 7, padding: 12 },
-  locationText: { fontSize: 13, fontWeight: '400', lineHeight: 18 },
-  locationCoords: { fontSize: 11, marginTop: 2 },
-  addLocationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 2, borderStyle: 'dashed', borderRadius: 7, paddingVertical: 18 },
-  addLocationText: { fontSize: 15, fontWeight: '400' },
+  negotiableRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  checkbox: { width: 22, height: 22, borderRadius: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  stockRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  stockPill: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  stockPillText: { fontSize: 13, fontWeight: '400' },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   photoThumbBox: { width: THUMB, height: THUMB, borderRadius: 6, overflow: 'hidden', position: 'relative' },
   photoThumb: { width: '100%', height: '100%' },
@@ -631,9 +501,4 @@ const styles = StyleSheet.create({
   pickerItemText: { fontSize: 15 },
   pickerClose: { marginTop: 8, padding: 14, alignItems: 'center' },
   pickerCloseText: { fontSize: 15, fontWeight: '400' },
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
 });

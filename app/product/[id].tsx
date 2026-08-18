@@ -19,6 +19,7 @@ import { CategoryIcon } from '../../components/CategoryIcon';
 import { ContentContainer } from '../../components/ContentContainer';
 import { AppHeader } from '../../components/AppHeader';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
+import { getStockBadge } from '../../lib/productStock';
 
 registerTranslations({
   'Produit introuvable': 'Product not found',
@@ -38,14 +39,14 @@ registerTranslations({
   'Partager': 'Share',
   'Trouvé sur BurkinaBizz': 'Found on BurkinaBizz',
   "Impossible d'ouvrir WhatsApp.": 'Unable to open WhatsApp.',
-  'Électronique': 'Electronics',
   'Téléphones & Tablettes': 'Phones & Tablets',
-  'Vêtements & Mode': 'Clothing & Fashion',
-  'Meubles & Maison': 'Furniture & Home',
+  'Électronique': 'Electronics',
+  'Produits Locaux': 'Local Products',
   'Véhicules': 'Vehicles',
-  'Beauté & Santé': 'Beauty & Health',
-  'Sports & Loisirs': 'Sports & Leisure',
-  'Livres & Éducation': 'Books & Education',
+  'Mode & Vêtements': 'Fashion & Clothing',
+  'Meubles & Maison': 'Furniture & Home',
+  'Immobilier': 'Real Estate',
+  'Loisirs & Sports': 'Leisure & Sports',
   'Bébé & Enfants': 'Baby & Kids',
   'Autres': 'Other',
 });
@@ -57,7 +58,7 @@ export default function ProductDetailScreen() {
   const { theme } = useColorTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,7 +161,8 @@ export default function ProductDetailScreen() {
     </View>
   );
 
-  const hasContact = !!(product.phone || product.whatsapp);
+  const hasContact = !!(product.phone || product.whatsapp || product.ownerName);
+  const stockBadge = getStockBadge(product, language);
 
   return (
     <>
@@ -234,6 +236,11 @@ export default function ProductDetailScreen() {
                       <Text style={[styles.negotiableBadgeText, { color: '#2E7D32' }]}>{t('Négociable')}</Text>
                     </View>
                   )}
+                  {stockBadge && (
+                    <View style={[styles.negotiableBadge, { backgroundColor: stockBadge.color + '22' }]}>
+                      <Text style={[styles.negotiableBadgeText, { color: stockBadge.color }]}>{stockBadge.label}</Text>
+                    </View>
+                  )}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
                   <Ionicons name="location" size={14} color={theme.textSecondary} />
@@ -275,17 +282,23 @@ export default function ProductDetailScreen() {
                   </View>
                   <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('Contacter')}</Text>
                 </View>
+                {!!product.ownerName && (
+                  <View style={styles.sellerRow}>
+                    <Ionicons name="person-outline" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.sellerName, { color: theme.text }]}>{product.ownerName}</Text>
+                  </View>
+                )}
                 <View style={styles.contactRow}>
                   {product.phone && (
                     <TouchableOpacity style={[styles.contactBtn, { backgroundColor: Colors.headerGradient[0] }]} onPress={openPhone}>
-                      <Ionicons name="call" size={18} color="#fff" />
+                      <Ionicons name="call" size={14} color="#fff" />
                       <Text style={styles.contactBtnText}>{t('Appeler')}</Text>
                     </TouchableOpacity>
                   )}
                   {product.whatsapp && (
                     <TouchableOpacity style={[styles.contactBtn, { backgroundColor: '#1B5E20' }]} onPress={openWhatsApp}>
-                      <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-                      <Text style={styles.contactBtnText}>{t(product.negotiable ? 'Négocier sur WhatsApp' : 'Contacter sur WhatsApp')}</Text>
+                      <Ionicons name="logo-whatsapp" size={14} color="#fff" />
+                      <Text style={styles.contactBtnText}>{t(product.negotiable ? 'WhatsApp' : 'Contacter sur WhatsApp')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -324,9 +337,11 @@ const styles = StyleSheet.create({
   sectionBadge: { width: 28, height: 28, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '400' },
   description: { fontSize: 14, lineHeight: 22 },
+  sellerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  sellerName: { fontSize: 14, fontWeight: '400' },
   contactRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  contactBtn: { flex: 1, minWidth: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 7, gap: 6 },
-  contactBtnText: { color: '#fff', fontSize: 14, fontWeight: '400' },
+  contactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 7, gap: 5 },
+  contactBtnText: { color: '#fff', fontSize: 12.5, fontWeight: '400' },
   shareFab: {
     position: 'absolute', top: 16, right: 16, zIndex: 10,
     width: 36, height: 36, borderRadius: 18,

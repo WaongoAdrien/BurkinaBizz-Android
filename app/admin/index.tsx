@@ -15,11 +15,12 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/AuthContext';
-import { Colors } from '../../constants';
+import { Colors, PRODUCT_CATEGORIES } from '../../constants';
 import { useColorTheme } from '../../hooks/useColorTheme';
 import { useTranslation, registerTranslations } from '../../lib/LanguageContext';
-import LocationPicker from '../../components/Locationpicker';
 import { AppHeader } from '../../components/AppHeader';
+import EditContentModal, { ContentKind, CONTENT_COLLECTION } from '../../components/EditContentModal';
+import { formatEventDateRange } from '../../lib/eventDate';
 
 registerTranslations({
   'Position GPS (pour la carte)': 'GPS position (for the map)',
@@ -74,6 +75,7 @@ registerTranslations({
   'Révoquer le vendeur': 'Revoke vendor',
   'Entreprises en attente': 'Businesses pending',
   'Vendeurs en attente': 'Vendors pending',
+  'Produits en attente': 'Products pending',
   'Entreprises': 'Businesses',
   'Vendeurs': 'Vendors',
   'Signalements': 'Reports',
@@ -169,10 +171,28 @@ registerTranslations({
   'Plus petit = apparaît en premier': 'Smaller = appears first',
   'Le nom et la catégorie sont requis.': 'Name and category are required.',
   'Supprimer cette application?': 'Delete this application?',
+  'Produits': 'Products',
+  'Rechercher un produit...': 'Search for a product...',
+  'Approuver ce produit?': 'Approve this product?',
+  ' apparaîtra sur le marché.': ' will appear on the marketplace.',
+  'Rejeter ce produit?': 'Reject this product?',
+  'Retirer du marché?': 'Remove from marketplace?',
+  'Aucun produit en attente': 'No pending products',
+  'Aucun produit publié': 'No published products',
+  'Téléphones & Tablettes': 'Phones & Tablets',
+  'Électronique': 'Electronics',
+  'Produits Locaux': 'Local Products',
+  'Véhicules': 'Vehicles',
+  'Mode & Vêtements': 'Fashion & Clothing',
+  'Meubles & Maison': 'Furniture & Home',
+  'Immobilier': 'Real Estate',
+  'Loisirs & Sports': 'Leisure & Sports',
+  'Bébé & Enfants': 'Baby & Kids',
+  'Autres': 'Other',
+  'Négociable': 'Negotiable',
 });
 
-type Tab = 'businesses' | 'users' | 'reports' | 'events' | 'attractions' | 'numbers' | 'sites' | 'applications';
-type ContentKind = 'events' | 'attractions';
+type Tab = 'businesses' | 'products' | 'users' | 'reports' | 'events' | 'attractions' | 'numbers' | 'sites' | 'applications';
 type AdminAlertButton = { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void };
 
 interface NumberFormState {
@@ -209,39 +229,6 @@ interface AppFormState {
 const emptyAppForm = (): AppFormState => ({
   visible: true, editId: null, name: '', category: '', description: '', image: '',
   androidUrl: '', iosUrl: '', website: '', order: '',
-});
-
-const CONTENT_COLLECTION: Record<ContentKind, string> = {
-  events: 'events',
-  attractions: 'touristSites',
-};
-
-interface ContentFormState {
-  visible: boolean;
-  kind: ContentKind;
-  editId: string | null;
-  name: string;
-  category: string;
-  location: string;
-  phone: string;
-  image: string;
-  date: string;
-  description: string;
-  mapLink: string;
-  facebook: string;
-  website: string;
-  photos: string;
-  schedule: string;
-  latitude: number | null;
-  longitude: number | null;
-  hotels: { name: string; link: string }[];
-}
-
-const emptyContentForm = (kind: ContentKind): ContentFormState => ({
-  visible: true, kind, editId: null,
-  name: '', category: '', location: '', phone: '', image: '', date: '', description: '',
-  mapLink: '', facebook: '', website: '', photos: '', schedule: '',
-  latitude: null, longitude: null, hotels: [],
 });
 
 // ── Duplicate detection ─────────────────────────────────────────────────────
@@ -288,13 +275,19 @@ export default function AdminScreen() {
   const deepLinkParams = useLocalSearchParams<{ tab?: string; editId?: string }>();
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { theme } = useColorTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const [tab, setTab] = useState<Tab>('businesses');
 
   // Businesses
   const [pendingBiz, setPendingBiz] = useState<any[]>([]);
   const [approvedBiz, setApprovedBiz] = useState<any[]>([]);
+
+  // Products
+  const [pendingProducts, setPendingProducts] = useState<any[]>([]);
+  const [approvedProducts, setApprovedProducts] = useState<any[]>([]);
+  const [productTab, setProductTab] = useState<'pending' | 'approved'>('pending');
+  const [productSearch, setProductSearch] = useState('');
 
   // Users
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
@@ -306,9 +299,7 @@ export default function AdminScreen() {
   // Events & Tourist attractions
   const [events, setEvents] = useState<any[]>([]);
   const [attractions, setAttractions] = useState<any[]>([]);
-  const [contentForm, setContentForm] = useState<ContentFormState>({ ...emptyContentForm('events'), visible: false });
-  const [savingContent, setSavingContent] = useState(false);
-  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [contentModal, setContentModal] = useState<{ visible: boolean; kind: ContentKind; item: any | null }>({ visible: false, kind: 'events', item: null });
 
   // Useful numbers & Official sites (About Burkina)
   const [usefulNumbers, setUsefulNumbers] = useState<any[]>([]);
@@ -374,6 +365,16 @@ export default function AdminScreen() {
       snap => { setApprovedBiz(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sort)); }
     );
 
+    // ── Products ─────────────────────────────────────────────────────────
+    const u11 = onSnapshot(
+      query(collection(db, 'products'), where('status', '==', 'pending')),
+      snap => { setPendingProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sort)); }
+    );
+    const u12 = onSnapshot(
+      query(collection(db, 'products'), where('status', '==', 'approved')),
+      snap => { setApprovedProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sort)); }
+    );
+
     // ── Users ────────────────────────────────────────────────────────────
     const u3 = onSnapshot(
       query(collection(db, 'users'), where('role', '==', 'pending')),
@@ -416,27 +417,13 @@ export default function AdminScreen() {
       snap => setUsefulApps(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     );
 
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12(); };
   }, [isAdmin]);
 
   // ── Events & attractions actions ────────────────────────────────────────
-  const openAddContent = (kind: ContentKind) => setContentForm(emptyContentForm(kind));
-
-  const openEditContent = (kind: ContentKind, item: any) => setContentForm({
-    visible: true, kind, editId: item.id,
-    name: item.name || '', category: item.category || '', location: item.location || '',
-    phone: item.phone || '', image: item.image || '', date: item.date || '', description: item.description || '',
-    mapLink: item.mapLink || '', facebook: item.facebook || '', website: item.website || '',
-    photos: Array.isArray(item.photos) ? item.photos.join(', ') : '', schedule: item.schedule || '',
-    latitude: typeof item.latitude === 'number' ? item.latitude : null,
-    longitude: typeof item.longitude === 'number' ? item.longitude : null,
-    hotels: Array.isArray(item.hotels) ? item.hotels.map((h: any) => ({ name: h.name || '', link: h.link || '' })) : [],
-  });
-
-  const addHotelRow = () => setContentForm(prev => ({ ...prev, hotels: [...prev.hotels, { name: '', link: '' }] }));
-  const removeHotelRow = (index: number) => setContentForm(prev => ({ ...prev, hotels: prev.hotels.filter((_, i) => i !== index) }));
-  const updateHotelRow = (index: number, field: 'name' | 'link', value: string) =>
-    setContentForm(prev => ({ ...prev, hotels: prev.hotels.map((h, i) => (i === index ? { ...h, [field]: value } : h)) }));
+  const openAddContent = (kind: ContentKind) => setContentModal({ visible: true, kind, item: null });
+  const openEditContent = (kind: ContentKind, item: any) => setContentModal({ visible: true, kind, item });
+  const closeContentModal = () => setContentModal(prev => ({ ...prev, visible: false }));
 
   // Deep link from a tourist-site/event detail page's "edit" button (?tab=attractions|events&editId=...):
   // switch to that tab and open the edit modal once the matching item has loaded in from Firestore.
@@ -466,58 +453,9 @@ export default function AdminScreen() {
     appDeepLinkHandled.current = true;
   }, [deepLinkParams.tab, deepLinkParams.editId, usefulApps]);
 
-  const closeContentForm = () => setContentForm(prev => ({ ...prev, visible: false }));
-
   const quickAddContent = (kind: ContentKind) => {
     setTab(kind);
     openAddContent(kind);
-  };
-
-  const saveContent = async () => {
-    const { kind, editId, name, category, location, phone, image, date, description, mapLink, facebook, website, photos, schedule, latitude, longitude, hotels } = contentForm;
-    if (!name.trim() || !category.trim() || !location.trim()) {
-      showAlert(t('Erreur'), t('Le nom, la catégorie et le lieu sont requis.'));
-      return;
-    }
-    if (kind === 'attractions' && hotels.some(h => !!h.name.trim() !== !!h.link.trim())) {
-      showAlert(t('Erreur'), t('Chaque hôtel doit avoir un nom et un lien. Complétez ou supprimez la ligne incomplète.'));
-      return;
-    }
-    const collectionName = CONTENT_COLLECTION[kind];
-    const payload: any = { name: name.trim(), category: category.trim(), location: location.trim(), description: description.trim() };
-    if (phone.trim()) payload.phone = phone.trim();
-    if (image.trim()) payload.image = image.trim();
-    if (kind === 'events' && date.trim()) payload.date = date.trim();
-    if (mapLink.trim()) payload.mapLink = mapLink.trim();
-    if (facebook.trim()) payload.facebook = facebook.trim();
-    if (website.trim()) payload.website = website.trim();
-    if (kind === 'attractions' && schedule.trim()) payload.schedule = schedule.trim();
-    if (kind === 'attractions' && photos.trim()) {
-      payload.photos = photos.split(',').map(p => p.trim()).filter(Boolean);
-    }
-    if (kind === 'attractions') {
-      payload.hotels = hotels
-        .filter(h => h.name.trim() && h.link.trim())
-        .map(h => ({ name: h.name.trim(), link: h.link.trim() }));
-    }
-    if (latitude !== null && longitude !== null) {
-      payload.latitude = latitude;
-      payload.longitude = longitude;
-    }
-
-    setSavingContent(true);
-    try {
-      if (editId) {
-        await updateDoc(doc(db, collectionName, editId), payload);
-      } else {
-        await addDoc(collection(db, collectionName), { ...payload, createdAt: serverTimestamp() });
-      }
-      closeContentForm();
-    } catch (e: any) {
-      showAlert(t('Erreur'), e?.message || t("Impossible d'enregistrer."));
-    } finally {
-      setSavingContent(false);
-    }
   };
 
   const deleteContent = (kind: ContentKind, item: any) => {
@@ -741,6 +679,71 @@ export default function AdminScreen() {
             await updateDoc(doc(db, 'businesses', item.id), { status: 'pending' });
           } catch (e: any) {
             showAlert(t('Erreur'), e?.message || t('Impossible.'));
+          } finally { setActionId(null); }
+        },
+      },
+    ]);
+  };
+
+  // ── Product actions ─────────────────────────────────────────────────────
+  const approveProduct = (item: any) => {
+    showAlert(t('Approuver ce produit?'), `"${item.name}"${t(' apparaîtra sur le marché.')}`, [
+      { text: t('Annuler'), style: 'cancel' },
+      {
+        text: t('Approuver'), onPress: async () => {
+          setActionId(item.id);
+          try {
+            await updateDoc(doc(db, 'products', item.id), { status: 'approved' });
+          } catch (e: any) {
+            showAlert(t('Erreur'), e?.message || t("Impossible d'approuver."));
+          } finally { setActionId(null); }
+        },
+      },
+    ]);
+  };
+
+  const rejectProduct = (item: any) => {
+    showAlert(t('Rejeter ce produit?'), `"${item.name}"${t(' sera supprimée définitivement.')}`, [
+      { text: t('Annuler'), style: 'cancel' },
+      {
+        text: t('Rejeter'), style: 'destructive', onPress: async () => {
+          setActionId(item.id);
+          try {
+            await deleteDoc(doc(db, 'products', item.id));
+          } catch (e: any) {
+            showAlert(t('Erreur'), e?.message || t('Impossible de rejeter.'));
+          } finally { setActionId(null); }
+        },
+      },
+    ]);
+  };
+
+  const revokeProduct = (item: any) => {
+    showAlert(t('Retirer du marché?'), `"${item.name}"${t(' ne sera plus visible.')}`, [
+      { text: t('Annuler'), style: 'cancel' },
+      {
+        text: t('Retirer'), style: 'destructive', onPress: async () => {
+          setActionId(item.id);
+          try {
+            await updateDoc(doc(db, 'products', item.id), { status: 'pending' });
+          } catch (e: any) {
+            showAlert(t('Erreur'), e?.message || t('Impossible.'));
+          } finally { setActionId(null); }
+        },
+      },
+    ]);
+  };
+
+  const deleteProduct = (item: any) => {
+    showAlert(t('Supprimer?'), `"${item.name}"${t(' sera supprimé définitivement.')}`, [
+      { text: t('Annuler'), style: 'cancel' },
+      {
+        text: t('Supprimer'), style: 'destructive', onPress: async () => {
+          setActionId(item.id);
+          try {
+            await deleteDoc(doc(db, 'products', item.id));
+          } catch (e: any) {
+            showAlert(t('Erreur'), e?.message || t('Impossible de supprimer.'));
           } finally { setActionId(null); }
         },
       },
@@ -973,6 +976,135 @@ export default function AdminScreen() {
     </View>
   );
 
+  const renderPendingProduct = ({ item }: { item: any }) => {
+    const cat = PRODUCT_CATEGORIES.find(c => c.label === item.category);
+    const cover = item.photos?.[0] || item.imageUrl;
+    return (
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardTop}>
+          {cover ? (
+            <Image source={{ uri: cover }} style={[styles.avatar, { backgroundColor: theme.border }]} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: Colors.cta + '33' }]}>
+              <MaterialIcons name={(cat?.icon as any) || 'sell'} size={20} color={Colors.cta} />
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.name, { color: theme.text }]}>{item.name}</Text>
+            <View style={styles.metaRow}>
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{t(item.category)}</Text>
+              <MaterialIcons name="place" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.city}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialIcons name="sell" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.price?.toLocaleString('fr-FR')} FCFA{item.negotiable ? ` · ${t('Négociable')}` : ''}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialIcons name="person" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.ownerName}</Text>
+            </View>
+          </View>
+          <View style={[styles.badge, { backgroundColor: Colors.cta + '22' }]}>
+            <Text style={[styles.badgeText, { color: Colors.cta }]}>{t('En attente')}</Text>
+          </View>
+        </View>
+        {item.description ? (
+          <Text style={[styles.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text>
+        ) : null}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.rejectBtn}
+            onPress={() => rejectProduct(item)}
+            disabled={actionId === item.id}
+          >
+            {actionId === item.id
+              ? <ActivityIndicator size="small" color="#D32F2F" />
+              : <><MaterialIcons name="close" size={14} color="#D32F2F" /><Text style={styles.rejectText}>{t('Rejeter')}</Text></>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.approveBtn}
+            onPress={() => approveProduct(item)}
+            disabled={actionId === item.id}
+          >
+            {actionId === item.id
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <><MaterialIcons name="check" size={14} color="#fff" /><Text style={styles.approveText}>{t('Approuver')}</Text></>
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderApprovedProduct = ({ item }: { item: any }) => {
+    const cat = PRODUCT_CATEGORIES.find(c => c.label === item.category);
+    const cover = item.photos?.[0] || item.imageUrl;
+    return (
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardTop}>
+          {cover ? (
+            <Image source={{ uri: cover }} style={[styles.avatar, { backgroundColor: theme.border }]} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: Colors.primary + '33' }]}>
+              <MaterialIcons name={(cat?.icon as any) || 'sell'} size={20} color={Colors.primary} />
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.metaRow}>
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{t(item.category)}</Text>
+              <MaterialIcons name="place" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.city}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialIcons name="sell" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.price?.toLocaleString('fr-FR')} FCFA{item.negotiable ? ` · ${t('Négociable')}` : ''}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialIcons name="person" size={12} color={theme.textSecondary} />
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.ownerName}</Text>
+            </View>
+          </View>
+          <View style={[styles.badge, { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary + '22' }]}>
+            <MaterialIcons name="check-circle" size={12} color={Colors.primary} />
+            <Text style={[styles.badgeText, { color: Colors.primary }]}>{t('Publié')}</Text>
+          </View>
+        </View>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.editAdminBtn, { borderColor: Colors.cta, backgroundColor: Colors.cta + '22' }]}
+            onPress={() => router.push(`/vendor/edit-product?id=${item.id}`)}
+          >
+            <MaterialIcons name="edit" size={14} color={Colors.cta} />
+            <Text style={[styles.editAdminText, { color: Colors.cta }]}>{t('Modifier')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.revokeBtn, { borderColor: theme.border }]}
+            onPress={() => revokeProduct(item)}
+            disabled={actionId === item.id}
+          >
+            {actionId === item.id
+              ? <ActivityIndicator size="small" color={theme.textSecondary} />
+              : <><MaterialIcons name="block" size={13} color={theme.textSecondary} /><Text style={[styles.revokeText, { color: theme.textSecondary }]}>{t('Retirer')}</Text></>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.rejectBtn}
+            onPress={() => deleteProduct(item)}
+            disabled={actionId === item.id}
+          >
+            {actionId === item.id
+              ? <ActivityIndicator size="small" color="#D32F2F" />
+              : <MaterialIcons name="delete-outline" size={16} color="#D32F2F" />
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   const renderPendingUser = ({ item }: { item: any }) => (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
@@ -1090,7 +1222,9 @@ export default function AdminScreen() {
           {kind === 'events' && item.date ? (
             <View style={styles.metaRow}>
               <MaterialIcons name="event" size={12} color={theme.textSecondary} />
-              <Text style={[styles.meta, { color: theme.textSecondary }]}>{item.date}</Text>
+              <Text style={[styles.meta, { color: theme.textSecondary }]}>
+                {formatEventDateRange(item.date, item.endDate, language) || item.date}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -1280,12 +1414,17 @@ export default function AdminScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNum}>{pendingBiz.length}</Text>
-            <Text style={styles.statLbl}>{t('Entreprises en attente')}</Text>
+            <Text style={styles.statLbl} numberOfLines={2}>{t('Entreprises en attente')}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNum}>{pendingProducts.length}</Text>
+            <Text style={styles.statLbl} numberOfLines={2}>{t('Produits en attente')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNum}>{pendingUsers.length}</Text>
-            <Text style={styles.statLbl}>{t('Vendeurs en attente')}</Text>
+            <Text style={styles.statLbl} numberOfLines={2}>{t('Vendeurs en attente')}</Text>
           </View>
         </View>
       </LinearGradient>
@@ -1306,6 +1445,17 @@ export default function AdminScreen() {
             <MaterialIcons name="storefront" size={16} color={tab === 'businesses' ? Colors.primary : theme.textSecondary} />
             <Text style={[styles.mainTabText, { color: tab === 'businesses' ? Colors.primary : theme.textSecondary }]}>
               {t('Entreprises')} {pendingBiz.length > 0 ? `(${pendingBiz.length})` : ''}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mainTabBtn, tab === 'products' && { borderBottomColor: Colors.cta, borderBottomWidth: 2.5 }]}
+          onPress={() => setTab('products')}
+        >
+          <View style={styles.tabInner}>
+            <MaterialIcons name="sell" size={16} color={tab === 'products' ? Colors.cta : theme.textSecondary} />
+            <Text style={[styles.mainTabText, { color: tab === 'products' ? Colors.cta : theme.textSecondary }]}>
+              {t('Produits')} {pendingProducts.length > 0 ? `(${pendingProducts.length})` : ''}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1445,6 +1595,63 @@ export default function AdminScreen() {
                 <MaterialIcons name={bizSearch ? 'search-off' : bizTab === 'pending' ? 'celebration' : 'storefront'} size={48} color={theme.textSecondary} />
                 <Text style={[styles.emptyText, { color: theme.text }]}>
                   {bizSearch ? t('Aucun résultat') : bizTab === 'pending' ? t('Aucune entreprise en attente') : t('Aucune entreprise publiée')}
+                </Text>
+              </View>
+            }
+          />
+        </>
+      )}
+
+      {!loading && tab === 'products' && (
+        <>
+          {/* SEARCH BAR */}
+          <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <MaterialIcons name="search" size={16} color={theme.textSecondary} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder={t('Rechercher un produit...')}
+              placeholderTextColor={theme.textSecondary}
+              value={productSearch}
+              onChangeText={setProductSearch}
+              autoCorrect={false}
+            />
+            {productSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setProductSearch('')}>
+                <MaterialIcons name="close" size={16} color={theme.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={[styles.subTabRow, { backgroundColor: theme.surface }]}>
+            {(['pending', 'approved'] as const).map(st => (
+              <TouchableOpacity key={st}
+                style={[styles.subTabBtn, productTab === st && { backgroundColor: Colors.primary }]}
+                onPress={() => setProductTab(st)}>
+                <Text style={[styles.subTabText, { color: productTab === st ? '#fff' : theme.textSecondary }]}>
+                  {st === 'pending' ? `${t('En attente')} (${pendingProducts.length})` : `${t('Publiées')} (${approvedProducts.length})`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <FlatList
+            data={(productTab === 'pending' ? pendingProducts : approvedProducts).filter(p => {
+              if (!productSearch.trim()) return true;
+              const s = productSearch.toLowerCase();
+              return p.name?.toLowerCase().includes(s) ||
+                     p.ownerName?.toLowerCase().includes(s) ||
+                     p.city?.toLowerCase().includes(s);
+            })}
+            keyExtractor={item => item.id}
+            renderItem={productTab === 'pending' ? renderPendingProduct : renderApprovedProduct}
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(true)} tintColor={Colors.primary} colors={[Colors.primary]} />}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <MaterialIcons name={productSearch ? 'search-off' : productTab === 'pending' ? 'celebration' : 'sell'} size={48} color={theme.textSecondary} />
+                <Text style={[styles.emptyText, { color: theme.text }]}>
+                  {productSearch ? t('Aucun résultat') : productTab === 'pending' ? t('Aucun produit en attente') : t('Aucun produit publié')}
                 </Text>
               </View>
             }
@@ -1835,239 +2042,13 @@ export default function AdminScreen() {
       </Modal>
 
       {/* ADD/EDIT EVENT OR ATTRACTION MODAL */}
-      <Modal
-        visible={contentForm.visible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeContentForm}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={[styles.modalOverlay, { padding: 16 }]}>
-          <View style={[styles.modalBox, { backgroundColor: theme.card, maxHeight: '85%', maxWidth: 640 }]}>
-            <View style={styles.modalTitleRow}>
-              <MaterialIcons name={contentForm.kind === 'events' ? 'event' : 'photo-camera'} size={18} color={Colors.primary} />
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                {contentForm.editId ? t('Modifier') : t('Ajouter')} {contentForm.kind === 'events' ? t('un événement') : t('un site touristique')}
-              </Text>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Nom *')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.name}
-                onChangeText={v => setContentForm(prev => ({ ...prev, name: v }))}
-                placeholder={t('Nom')}
-                placeholderTextColor={theme.textSecondary}
-              />
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Catégorie *')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.category}
-                onChangeText={v => setContentForm(prev => ({ ...prev, category: v }))}
-                placeholder={t('Ex : Culture, Musique, Nature...')}
-                placeholderTextColor={theme.textSecondary}
-              />
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Lieu *')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.location}
-                onChangeText={v => setContentForm(prev => ({ ...prev, location: v }))}
-                placeholder={t('Ex : Ouagadougou')}
-                placeholderTextColor={theme.textSecondary}
-              />
-              {contentForm.kind === 'events' && (
-                <>
-                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Date')}</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                    value={contentForm.date}
-                    onChangeText={v => setContentForm(prev => ({ ...prev, date: v }))}
-                    placeholder={t('Ex : 12 septembre 2026')}
-                    placeholderTextColor={theme.textSecondary}
-                  />
-                </>
-              )}
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Téléphone')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.phone}
-                onChangeText={v => setContentForm(prev => ({ ...prev, phone: v }))}
-                placeholder={t('Optionnel')}
-                placeholderTextColor={theme.textSecondary}
-                keyboardType="phone-pad"
-              />
-              {contentForm.kind === 'attractions' && (
-                <>
-                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Horaires')}</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                    value={contentForm.schedule}
-                    onChangeText={v => setContentForm(prev => ({ ...prev, schedule: v }))}
-                    placeholder={t('Ex : Tous les jours, 8h-18h')}
-                    placeholderTextColor={theme.textSecondary}
-                  />
-                </>
-              )}
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Lien carte (Google Maps)')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.mapLink}
-                onChangeText={v => setContentForm(prev => ({ ...prev, mapLink: v }))}
-                placeholder={t('Optionnel — https://maps.app.goo.gl/...')}
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Position GPS (pour la carte)')}</Text>
-              <TouchableOpacity
-                style={[styles.gpsPickBtn, { borderColor: theme.border }]}
-                onPress={() => setLocationPickerVisible(true)}
-              >
-                <MaterialIcons name="place" size={16} color={contentForm.latitude !== null ? Colors.primary : theme.textSecondary} />
-                <Text style={[styles.gpsPickBtnText, { color: contentForm.latitude !== null ? theme.text : theme.textSecondary }]}>
-                  {contentForm.latitude !== null
-                    ? `${contentForm.latitude.toFixed(5)}, ${contentForm.longitude!.toFixed(5)}`
-                    : t('Optionnel — choisir sur la carte')}
-                </Text>
-                {contentForm.latitude !== null && (
-                  <TouchableOpacity
-                    onPress={() => setContentForm(prev => ({ ...prev, latitude: null, longitude: null }))}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialIcons name="close" size={16} color={theme.textSecondary} />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Page Facebook')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.facebook}
-                onChangeText={v => setContentForm(prev => ({ ...prev, facebook: v }))}
-                placeholder={t('Optionnel — https://facebook.com/...')}
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Site web')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.website}
-                onChangeText={v => setContentForm(prev => ({ ...prev, website: v }))}
-                placeholder={t('Optionnel — https://...')}
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Image (URL)')}</Text>
-              <TextInput
-                style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.image}
-                onChangeText={v => setContentForm(prev => ({ ...prev, image: v }))}
-                placeholder="https://..."
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-              />
-              {contentForm.kind === 'attractions' && (
-                <>
-                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Photos supplémentaires')}</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                    value={contentForm.photos}
-                    onChangeText={v => setContentForm(prev => ({ ...prev, photos: v }))}
-                    placeholder={t('Optionnel — URLs séparées par des virgules')}
-                    placeholderTextColor={theme.textSecondary}
-                    autoCapitalize="none"
-                  />
-                </>
-              )}
-              {contentForm.kind === 'attractions' && (
-                <>
-                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Hôtels recommandés')}</Text>
-                  {contentForm.hotels.map((hotel, index) => (
-                    <View key={index} style={styles.hotelRow}>
-                      <MaterialIcons name="hotel" size={18} color={theme.textSecondary} />
-                      <View style={{ flex: 1, gap: 6 }}>
-                        <TextInput
-                          style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                          value={hotel.name}
-                          onChangeText={v => updateHotelRow(index, 'name', v)}
-                          placeholder={t("Nom de l'hôtel")}
-                          placeholderTextColor={theme.textSecondary}
-                        />
-                        <TextInput
-                          style={[styles.fieldInput, { borderColor: theme.border, color: theme.text }]}
-                          value={hotel.link}
-                          onChangeText={v => updateHotelRow(index, 'link', v)}
-                          placeholder={t('Optionnel — https://... ou https://booking.com/...')}
-                          placeholderTextColor={theme.textSecondary}
-                          autoCapitalize="none"
-                          keyboardType="url"
-                        />
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => removeHotelRow(index)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={{ paddingTop: 10 }}
-                      >
-                        <MaterialIcons name="close" size={18} color={theme.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity style={[styles.addHotelBtn, { borderColor: theme.border }]} onPress={addHotelRow}>
-                    <MaterialIcons name="add" size={16} color={Colors.primary} />
-                    <Text style={[styles.addHotelBtnText, { color: Colors.primary }]}>{t('Ajouter un hôtel')}</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{t('Description')}</Text>
-              <TextInput
-                style={[styles.fieldInput, styles.fieldInputMultiline, { borderColor: theme.border, color: theme.text }]}
-                value={contentForm.description}
-                onChangeText={v => setContentForm(prev => ({ ...prev, description: v }))}
-                placeholder={t('Description')}
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                numberOfLines={4}
-              />
-            </ScrollView>
-            <View style={styles.modalBtns}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { borderColor: theme.border }]}
-                onPress={closeContentForm}
-                disabled={savingContent}
-              >
-                <Text style={[styles.modalBtnText, { color: theme.textSecondary }]}>{t('Annuler')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: Colors.primary, borderColor: Colors.primary }]}
-                onPress={saveContent}
-                disabled={savingContent}
-              >
-                {savingContent
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={[styles.modalBtnText, { color: '#fff', fontWeight: '400' }]}>{t('Enregistrer')}</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* GPS PICKER FOR EVENT/ATTRACTION LOCATION */}
-      <LocationPicker
-        visible={locationPickerVisible}
-        current={contentForm.latitude !== null ? { latitude: contentForm.latitude, longitude: contentForm.longitude! } : undefined}
-        onConfirm={(loc) => {
-          setContentForm(prev => ({
-            ...prev,
-            latitude: loc.latitude ?? null,
-            longitude: loc.longitude ?? null,
-          }));
-          setLocationPickerVisible(false);
-        }}
-        onClose={() => setLocationPickerVisible(false)}
+      <EditContentModal
+        visible={contentModal.visible}
+        kind={contentModal.kind}
+        item={contentModal.item}
+        onClose={closeContentModal}
         theme={theme}
+        showAlert={(title, message) => showAlert(title, message)}
       />
 
       {/* ADD/EDIT USEFUL NUMBER MODAL */}
@@ -2349,11 +2330,11 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   headerTitle: { fontSize: 20, fontWeight: '400', color: '#fff' },
   headerSub: { fontSize: 12, color: '#A5D6A7', marginTop: 1 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 32 },
-  statItem: { alignItems: 'center' },
-  statNum: { fontSize: 26, fontWeight: '400', color: '#fff' },
-  statLbl: { fontSize: 11, color: '#A5D6A7', marginTop: 1 },
-  statDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.3)' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  statItem: { flex: 1, alignItems: 'center', minWidth: 0, paddingHorizontal: 4 },
+  statNum: { fontSize: 24, fontWeight: '400', color: '#fff' },
+  statLbl: { fontSize: 10, color: '#A5D6A7', marginTop: 1, textAlign: 'center' },
+  statDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', flexShrink: 0 },
   quickLinksRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
   quickLinkBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   quickLinkText: { fontSize: 12, fontWeight: '400', textDecorationLine: 'underline' },

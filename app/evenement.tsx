@@ -11,6 +11,7 @@ import { Colors } from '../constants';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { useTranslation, registerTranslations } from '../lib/LanguageContext';
 import { AppHeader } from '../components/AppHeader';
+import { parseEventDate, isPastDate, getEventEndReference, formatEventDateRange } from '../lib/eventDate';
 
 registerTranslations({
   'Événements': 'Events',
@@ -22,6 +23,10 @@ registerTranslations({
   '🌍 Tous': '🌍 All',
   'Aucun événement ne correspond à votre recherche': 'No event matches your search',
   'Découvrez les événements à ne pas manquer près de chez vous': "Discover the events you shouldn't miss near you",
+  'À venir': 'Upcoming',
+  'Passés': 'Past',
+  'Date non précisée': 'Date unspecified',
+  '⚡ Prochain': '⚡ Next',
 });
 
 const HERO_IMAGE = require('../assets/imageindex.png');
@@ -35,6 +40,7 @@ interface EventItem {
   location: string;
   phone?: string;
   date?: string;
+  endDate?: string;
   description: string;
   mapLink?: string;
   facebook?: string;
@@ -42,13 +48,14 @@ interface EventItem {
   priority?: number;
 }
 
-function EventCard({ item, liked, onToggleLike }: {
-  item: EventItem; liked: boolean; onToggleLike: () => void;
+function EventCard({ item, liked, onToggleLike, next }: {
+  item: EventItem; liked: boolean; onToggleLike: () => void; next?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const canExpand = (item.description?.length || 0) > 90;
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
+  const dateLabel = formatEventDateRange(item.date, item.endDate, language) || item.date;
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => router.push(`/evenement/${item.id}`)} activeOpacity={0.9}>
@@ -64,6 +71,12 @@ function EventCard({ item, liked, onToggleLike }: {
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryBadgeText}>{item.category}</Text>
         </View>
+
+        {next && (
+          <View style={styles.nextBadge}>
+            <Text style={styles.nextBadgeText}>{t('⚡ Prochain')}</Text>
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.likeBtn}
@@ -82,10 +95,10 @@ function EventCard({ item, liked, onToggleLike }: {
             <Text style={styles.readMore}>{expanded ? t('Voir moins') : t('Lire la suite')}</Text>
           </TouchableOpacity>
         )}
-        {item.date && (
+        {dateLabel && (
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={14} color="#8A8A8A" />
-            <Text style={styles.infoText}>{item.date}</Text>
+            <Text style={styles.infoText}>{dateLabel}</Text>
           </View>
         )}
         <View style={styles.infoRow}>
@@ -103,6 +116,14 @@ function EventCard({ item, liked, onToggleLike }: {
         )}
       </View>
     </TouchableOpacity>
+  );
+}
+
+function SectionHeading({ label, theme }: { label: string; theme: any }) {
+  return (
+    <View style={styles.sectionHeadingRow}>
+      <Text style={[styles.sectionHeadingText, { color: theme.text }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -130,10 +151,6 @@ export default function EventsScreen() {
   };
 
   const byPriority = (a: EventItem, b: EventItem) => (b.priority || 0) - (a.priority || 0);
-  const sortedEvents = [
-    ...likedIds.map(id => events.find(e => e.id === id)!).filter(Boolean).sort(byPriority),
-    ...events.filter(e => !likedIds.includes(e.id)).sort(byPriority),
-  ];
 
   const categories = useMemo(() => {
     const set = new Set(events.map(e => e.category).filter(Boolean));
@@ -142,11 +159,32 @@ export default function EventsScreen() {
 
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  const displayedEvents = sortedEvents.filter(e => {
+  const filteredEvents = events.filter(e => {
     if (activeCategory !== 'Tous' && e.category !== activeCategory) return false;
     if (search.trim() && !normalize(e.name).includes(normalize(search.trim()))) return false;
     return true;
   });
+
+  // An event stays "upcoming" as long as it hasn't fully ended (endDate if set, else date) —
+  // an ongoing multi-day event shouldn't flip to "past" mid-run. Events whose date can't be
+  // parsed (legacy free-text dates) land in their own bucket instead of just vanishing.
+  const upcomingEvents: EventItem[] = [];
+  const pastEvents: EventItem[] = [];
+  const undatedEvents: EventItem[] = [];
+  filteredEvents.forEach(e => {
+    const endRef = getEventEndReference(e);
+    if (endRef === null) undatedEvents.push(e);
+    else if (isPastDate(endRef)) pastEvents.push(e);
+    else upcomingEvents.push(e);
+  });
+
+  const startTime = (e: EventItem) => (parseEventDate(e.date) ?? parseEventDate(e.endDate))?.getTime() ?? 0;
+  const endTime = (e: EventItem) => parseEventDate(getEventEndReference(e))?.getTime() ?? 0;
+  upcomingEvents.sort((a, b) => startTime(a) - startTime(b)); // soonest first
+  pastEvents.sort((a, b) => endTime(b) - endTime(a)); // most-recently-ended first
+  undatedEvents.sort(byPriority);
+
+  const displayedEvents = [...upcomingEvents, ...pastEvents, ...undatedEvents];
 
   return (
     <View style={{ flex: 1, backgroundColor: '#e8ecf0' }}>
@@ -215,14 +253,48 @@ export default function EventsScreen() {
               {t('Aucun événement ne correspond à votre recherche')}
             </Text>
           ) : (
-            displayedEvents.map(item => (
-              <EventCard
-                key={item.id}
-                item={item}
-                liked={likedIds.includes(item.id)}
-                onToggleLike={() => toggleLike(item.id)}
-              />
-            ))
+            <>
+              {upcomingEvents.length > 0 && (
+                <View style={styles.section}>
+                  <SectionHeading label={t('À venir')} theme={theme} />
+                  {upcomingEvents.map((item, i) => (
+                    <EventCard
+                      key={item.id}
+                      item={item}
+                      next={i === 0}
+                      liked={likedIds.includes(item.id)}
+                      onToggleLike={() => toggleLike(item.id)}
+                    />
+                  ))}
+                </View>
+              )}
+              {pastEvents.length > 0 && (
+                <View style={styles.section}>
+                  <SectionHeading label={t('Passés')} theme={theme} />
+                  {pastEvents.map(item => (
+                    <EventCard
+                      key={item.id}
+                      item={item}
+                      liked={likedIds.includes(item.id)}
+                      onToggleLike={() => toggleLike(item.id)}
+                    />
+                  ))}
+                </View>
+              )}
+              {undatedEvents.length > 0 && (
+                <View style={styles.section}>
+                  <SectionHeading label={t('Date non précisée')} theme={theme} />
+                  {undatedEvents.map(item => (
+                    <EventCard
+                      key={item.id}
+                      item={item}
+                      liked={likedIds.includes(item.id)}
+                      onToggleLike={() => toggleLike(item.id)}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
           )}
 
           {/* TOURISM CTA */}
@@ -283,6 +355,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   body: { paddingHorizontal: 10, paddingTop: 20, paddingBottom: 40, gap: 18 },
+  section: { gap: 14 },
+  sectionHeadingRow: { paddingHorizontal: 4 },
+  sectionHeadingText: { fontSize: 15, fontWeight: '600' },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderRadius: 8, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10,
@@ -324,6 +399,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   categoryBadgeText: { color: '#fff', fontSize: 11, fontWeight: '400' },
+  nextBadge: {
+    position: 'absolute',
+    top: 42,
+    left: 10,
+    backgroundColor: Colors.cta,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  nextBadgeText: { color: '#1A1A1A', fontSize: 11, fontWeight: '700' },
   likeBtn: {
     position: 'absolute',
     top: 10,

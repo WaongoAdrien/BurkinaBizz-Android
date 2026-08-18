@@ -185,7 +185,7 @@ function PickerModal({ visible, title, items, selected, onSelect, onClose, cardC
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 10;
 const STEPS = ['Informations', 'Contact', 'Horaires', 'Réseaux', 'Localisation', 'Photos'];
 
 export default function AddBusinessScreen() {
